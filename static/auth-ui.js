@@ -15,18 +15,9 @@ class AuthUI {
 
   async checkAuthStatus() {
     try {
-      // Check if we're on localhost and enable mock mode
-      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        // Check for mock login in sessionStorage
-        const mockUser = sessionStorage.getItem('mockUser');
-        if (mockUser) {
-          this.currentUser = JSON.parse(mockUser);
-          console.log('Mock user authenticated:', this.currentUser);
-          return;
-        }
-      }
-
-      const response = await fetch('/api/auth/me');
+      const response = await fetch('/api/auth/me', {
+        credentials: 'include'  // Include cookies in the request
+      });
       const result = await response.json();
       
       if (result.success && result.user) {
@@ -63,22 +54,10 @@ class AuthUI {
       `;
     } else {
       // User is not logged in
-      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      
       authContainer.innerHTML = `
         <div class="auth-login">
           <h3>Sign in to save your songs</h3>
           <p>Create an account to save and share your musical creations</p>
-          ${isLocalhost ? `
-            <div class="mock-login-section">
-              <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 12px;">
-                🧪 <strong>Development Mode:</strong> Use mock login to test the UI
-              </p>
-              <button id="mock-login-btn" class="btn btn-secondary" style="margin-bottom: 16px;">
-                🧪 Mock Login (Test User)
-              </button>
-            </div>
-          ` : ''}
           <div class="auth-email-form">
             <form id="email-auth-form">
               <div class="form-group">
@@ -123,13 +102,6 @@ class AuthUI {
       });
     }
 
-    // Mock login button (only on localhost)
-    const mockLoginBtn = document.getElementById('mock-login-btn');
-    if (mockLoginBtn) {
-      mockLoginBtn.addEventListener('click', () => {
-        this.mockLogin();
-      });
-    }
 
     // User menu dropdown functionality
     const userMenuTrigger = document.getElementById('user-menu-trigger');
@@ -165,16 +137,10 @@ class AuthUI {
 
   async signOut() {
     try {
-      // Check if we're in mock mode
-      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        sessionStorage.removeItem('mockUser');
-        this.currentUser = null;
-        this.renderAuthUI();
-        console.log('Mock user logged out');
-        return;
-      }
-
-      await fetch('/api/auth/logout', { method: 'POST' });
+      await fetch('/api/auth/logout', { 
+        method: 'POST',
+        credentials: 'include'  // Include cookies
+      });
       this.currentUser = null;
       this.renderAuthUI();
       window.location.reload();
@@ -183,23 +149,6 @@ class AuthUI {
     }
   }
 
-  mockLogin() {
-    // Create a mock user for testing
-    const mockUser = {
-      id: 'mock-user-123',
-      email: 'test@example.com',
-      name: 'Test User'
-    };
-    
-    // Store in sessionStorage for persistence during the session
-    sessionStorage.setItem('mockUser', JSON.stringify(mockUser));
-    
-    // Update current user and re-render
-    this.currentUser = mockUser;
-    this.renderAuthUI();
-    
-    console.log('Mock user logged in:', mockUser);
-  }
 
   toggleSignupMode() {
     const form = document.getElementById('email-auth-form');
@@ -237,6 +186,7 @@ class AuthUI {
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',  // Include cookies in the request
         body: JSON.stringify({ email, password })
       });
 
@@ -246,6 +196,8 @@ class AuthUI {
 
       if (response.ok && result.success) {
         console.log('Auth successful, updating UI');
+        // Small delay to ensure cookie is set
+        await new Promise(resolve => setTimeout(resolve, 100));
         await this.checkAuthStatus();
         this.renderAuthUI();
       } else {

@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth import authenticate
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
+from django.middleware.csrf import get_token
 import jwt
 from datetime import datetime, timedelta
 import os
@@ -100,49 +101,46 @@ def login(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    try:
-        user = User.objects.get(email=email)
-        if user.check_password(password):
-            # Create JWT token
-            secret = os.environ.get('NEXTAUTH_SECRET', os.environ.get('SECRET_KEY'))
-            token = jwt.encode(
-                {
-                    'userId': user.id,
-                    'email': user.email,
-                    'name': user.name or '',
-                    'exp': datetime.utcnow() + timedelta(days=7)
-                },
-                secret,
-                algorithm='HS256'
-            )
+    # Use Django's authenticate function to use our custom backend
+    from django.contrib.auth import authenticate
+    user = authenticate(request, username=email, password=password)
+    
+    if user:
+        # Create JWT token
+        secret = os.environ.get('NEXTAUTH_SECRET') or os.environ.get('SECRET_KEY') or 'django-insecure-change-me-in-production'
+        token = jwt.encode(
+            {
+                'userId': user.id,
+                'email': user.email,
+                'name': user.name or '',
+                'exp': int((datetime.utcnow() + timedelta(days=7)).timestamp())
+            },
+            secret,
+            algorithm='HS256'
+        )
 
-            response = Response({
-                'success': True,
-                'user': {
-                    'id': user.id,
-                    'email': user.email,
-                    'name': user.name
-                }
-            })
-            
-            # Set HTTP-only cookie
-            response.set_cookie(
-                'auth-token',
-                token,
-                httponly=True,
-                secure=not os.environ.get('DEBUG', 'False') == 'True',
-                samesite='Strict',
-                max_age=604800,  # 7 days
-                path='/'
-            )
-            
-            return response
-        else:
-            return Response(
-                {'error': 'Invalid credentials'},
-                status=status.HTTP_401_UNAUTHORIZED
-            )
-    except User.DoesNotExist:
+        response = Response({
+            'success': True,
+            'user': {
+                'id': user.id,
+                'email': user.email,
+                'name': user.name
+            }
+        })
+        
+        # Set HTTP-only cookie
+        response.set_cookie(
+            'auth-token',
+            token,
+            httponly=True,
+            secure=False,  # Allow HTTP in development
+            samesite='Strict',
+            max_age=604800,  # 7 days
+            path='/'
+        )
+        
+        return response
+    else:
         return Response(
             {'error': 'Invalid credentials'},
             status=status.HTTP_401_UNAUTHORIZED
@@ -178,13 +176,13 @@ def signup(request):
         )
         
         # Create JWT token
-        secret = os.environ.get('NEXTAUTH_SECRET', os.environ.get('SECRET_KEY'))
+        secret = os.environ.get('NEXTAUTH_SECRET') or os.environ.get('SECRET_KEY') or 'django-insecure-change-me-in-production'
         token = jwt.encode(
             {
                 'userId': user.id,
                 'email': user.email,
                 'name': user.name or '',
-                'exp': datetime.utcnow() + timedelta(days=7)
+                'exp': int((datetime.utcnow() + timedelta(days=7)).timestamp())
             },
             secret,
             algorithm='HS256'
@@ -204,7 +202,7 @@ def signup(request):
             'auth-token',
             token,
             httponly=True,
-            secure=not os.environ.get('DEBUG', 'False') == 'True',
+            secure=False,  # Allow HTTP in development
             samesite='Strict',
             max_age=604800,
             path='/'
@@ -226,23 +224,26 @@ def get_current_user(request):
     
     if not token:
         return Response(
-            {'error': 'Not authenticated'},
+            {'success': False, 'error': 'Not authenticated'},
             status=status.HTTP_401_UNAUTHORIZED
         )
 
     try:
-        secret = os.environ.get('NEXTAUTH_SECRET', os.environ.get('SECRET_KEY'))
+        secret = os.environ.get('NEXTAUTH_SECRET') or os.environ.get('SECRET_KEY') or 'django-insecure-change-me-in-production'
         decoded = jwt.decode(token, secret, algorithms=['HS256'])
         user = User.objects.get(id=decoded['userId'])
         
         return Response({
-            'id': user.id,
-            'email': user.email,
-            'name': user.name
+            'success': True,
+            'user': {
+                'id': user.id,
+                'email': user.email,
+                'name': user.name
+            }
         })
     except (jwt.InvalidTokenError, User.DoesNotExist):
         return Response(
-            {'error': 'Invalid token'},
+            {'success': False, 'error': 'Invalid token'},
             status=status.HTTP_401_UNAUTHORIZED
         )
 
@@ -278,7 +279,7 @@ class SongViewSet(viewsets.ModelViewSet):
             return None
 
         try:
-            secret = os.environ.get('NEXTAUTH_SECRET', os.environ.get('SECRET_KEY'))
+            secret = os.environ.get('NEXTAUTH_SECRET') or os.environ.get('SECRET_KEY') or 'django-insecure-change-me-in-production'
             decoded = jwt.decode(token, secret, algorithms=['HS256'])
             return User.objects.get(id=decoded['userId'])
         except (jwt.InvalidTokenError, User.DoesNotExist):

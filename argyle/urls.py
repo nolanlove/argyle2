@@ -15,13 +15,19 @@ router.register(r'songs', views.SongViewSet, basename='song')
 urlpatterns = [
     path('admin/', admin.site.urls),
     
-    # API endpoints
+    # Django-allauth URLs (must come before accounts URLs)
+    path('accounts/', include('allauth.urls')),
+    
+    # Custom accounts URLs
+    path('accounts/', include('accounts.urls')),
+    
+    # API endpoints (keep for backward compatibility with frontend)
     path('api/health', views.health_check, name='health'),
     path('api/openai/chat', views.openai_chat, name='openai-chat'),
-    path('api/auth/login', views.login, name='login'),
-    path('api/auth/signup', views.signup, name='signup'),
-    path('api/auth/logout', views.logout, name='logout'),
-    path('api/auth/me', views.get_current_user, name='me'),
+    path('api/auth/login', views.login, name='api-login'),
+    path('api/auth/signup', views.signup, name='api-signup'),
+    path('api/auth/logout', views.logout, name='api-logout'),
+    path('api/auth/me', views.get_current_user, name='api-me'),
     path('api/', include(router.urls)),
     
     # Serve frontend
