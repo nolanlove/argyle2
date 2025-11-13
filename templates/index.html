@@ -1,0 +1,295 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Argyle">
+    <title>Argyle</title>
+    
+    <!-- Web App Icons -->
+    <link rel="icon" href="{% static 'favicon.ico' %}?v=1" sizes="any">
+    <link rel="icon" href="{% static 'favicon.ico' %}?v=1" type="image/x-icon">
+    <link rel="shortcut icon" href="{% static 'favicon.ico' %}?v=1">
+    
+    <!-- Apple Touch Icon (iPhone/iPad) -->
+    <link rel="apple-touch-icon" href="{% static 'apple-touch-icon.png' %}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{% static 'apple-touch-icon.png' %}">
+    <link rel="apple-touch-icon" sizes="152x152" href="{% static 'apple-touch-icon.png' %}">
+    <link rel="apple-touch-icon" sizes="144x144" href="{% static 'apple-touch-icon.png' %}">
+    <link rel="apple-touch-icon" sizes="120x120" href="{% static 'apple-touch-icon.png' %}">
+    <link rel="apple-touch-icon" sizes="114x114" href="{% static 'apple-touch-icon.png' %}">
+    <link rel="apple-touch-icon" sizes="76x76" href="{% static 'apple-touch-icon.png' %}">
+    <link rel="apple-touch-icon" sizes="72x72" href="{% static 'apple-touch-icon.png' %}">
+    <link rel="apple-touch-icon" sizes="60x60" href="{% static 'apple-touch-icon.png' %}">
+    <link rel="apple-touch-icon" sizes="57x57" href="{% static 'apple-touch-icon.png' %}">
+    
+    <!-- Android/General Web App Icon -->
+    <link rel="icon" type="image/png" sizes="192x192" href="{% static 'argyle_logo.png' %}">
+    <link rel="icon" type="image/png" sizes="512x512" href="{% static 'argyle_logo.png' %}">
+    
+    <!-- Web App Manifest -->
+    <link rel="manifest" href="{% static 'manifest.json' %}">
+    <link rel="stylesheet" href="{% static 'styles.css' %}?v=21">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Audio initialization overlay -->
+    <div id="audio-overlay" class="audio-overlay">
+        <div class="audio-overlay-content">
+            <h2>♬ Click to Start Audio</h2>
+            <p>Click anywhere to enable audio playback</p>
+        </div>
+    </div>
+
+    <!-- AI Chatbot Interface -->
+    <div id="chatbot-container" class="chatbot-container">
+        <div id="chatbot-toggle" class="chatbot-toggle">
+                            <span class="chatbot-icon">✨</span>
+            <span class="chatbot-label">AI Assistant</span>
+        </div>
+        
+        <div id="chatbot-panel" class="chatbot-panel">
+            <div class="chatbot-header">
+                <h3>🎵 Musical AI Assistant</h3>
+                <button id="chatbot-close" class="chatbot-close">&times;</button>
+            </div>
+            
+            <div id="chatbot-messages" class="chatbot-messages">
+                <div class="chatbot-message chatbot-bot">
+                    <div class="message-content">
+                        <p>Hello! I'm your musical AI assistant. I can help you find chord progressions, keys, and format them for Argyle's sequencer.</p>
+                        <div id="openai-status" style="margin: 8px 0; padding: 8px; border-radius: 6px; font-size: 0.85rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span id="status-text">Loading...</span>
+                                <button id="reset-openai-key-status" style="background: #ef4444; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer; margin-left: 8px;">Reset Key</button>
+                            </div>
+                        </div>
+                        <p>Try asking me something like:</p>
+                        <ul>
+                            <li>"Find me the chords to Yesterday by the Beatles"</li>
+                            <li>"What's the chord progression for Wonderwall?"</li>
+                            <li>"Show me the C major key"</li>
+                            <li>"Format these chords: Am F C G"</li>
+                        </ul>
+                        <div id="openai-setup" style="display: none; margin-top: 12px; padding: 12px; background: rgba(59, 130, 246, 0.1); border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.3);">
+                            <p style="margin: 0 0 8px 0; font-size: 0.9rem;"><strong>🔧 Server-Side AI Setup:</strong></p>
+                            <p style="margin: 0 0 8px 0; font-size: 0.8rem; opacity: 0.9;">API keys are now managed securely on the server. Configure your OpenAI API key in the Vercel environment variables.</p>
+                            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                                <button id="save-openai-key" style="background: #3b82f6; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 0.85rem; cursor: pointer; flex: 1;">Check Status</button>
+                                <button id="reset-openai-key" style="background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 0.85rem; cursor: pointer;">Server Info</button>
+                            </div>
+                            <p style="margin: 8px 0 0 0; font-size: 0.75rem; opacity: 0.8;">🔐 Your API key is now protected server-side</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="chatbot-input-container">
+                <input type="text" id="chatbot-input" class="chatbot-input" placeholder="Ask me about music..." maxlength="10000">
+                <button id="chatbot-send" class="chatbot-send">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Authentication UI -->
+    <div id="auth-container" class="auth-container"></div>
+    
+    <div class="container">
+        <header class="header">
+            <div class="header-content">
+                <div class="title-container">
+                    <img src="{% static 'argyle_logo.png' %}" alt="Argyle Logo" class="logo">
+                    <h1 class="title">Argyle</h1>
+                </div>
+                <h2 class="subtitle">Isomorphic Musical Grid</h2>
+            </div>
+        </header>
+        
+        <main class="main">
+            <div class="grid-wrapper">
+                <div id="info-background">
+                    <button class="info-key" id="info-key">Key: C Major</button>
+                    <button class="btn info-play-key" id="playKeyInfo">▶ Play Scale</button>
+                    <button class="btn btn-secondary info-play-mode" id="playModeToggle">Draw Chords</button>
+                    <button class="btn btn-secondary info-grid-labels" id="gridLabelsToggle">Grid Labels</button>
+                    <button class="btn info-chord" id="info-chord">Chord: None</button>
+                    <button class="btn btn-secondary info-clear" id="clearMusical">Clear</button>
+                    <button class="btn btn-secondary info-play-chord" id="playChordInfo">▶ Play Chord</button>
+                    <button class="btn btn-secondary info-toggle-clones" id="toggleClones">Clones</button>
+                </div>
+                <div id="grid-container"></div>
+            </div>
+        </main>
+    </div>
+    
+    <!-- Key Selector Modal -->
+    <div id="key-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Select Key</h3>
+                <button id="close-key-modal" class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="key-selector-controls">
+                    <select id="modal-keyRootSelect" class="chord-select">
+                        <option value="C">C</option>
+                        <option value="C#/Db">C#/Db</option>
+                        <option value="D">D</option>
+                        <option value="D#/Eb">D#/Eb</option>
+                        <option value="E">E</option>
+                        <option value="F">F</option>
+                        <option value="F#/Gb">F#/Gb</option>
+                        <option value="G">G</option>
+                        <option value="G#/Ab">G#/Ab</option>
+                        <option value="A">A</option>
+                        <option value="A#/Bb">A#/Bb</option>
+                        <option value="B">B</option>
+                    </select>
+                    <select id="modal-keyTypeSelect" class="chord-select">
+                        <!-- Major and Minor Keys -->
+                        <option value="major">Major</option>
+                        <option value="natural-minor">Natural Minor</option>
+                        <option value="harmonic-minor">Harmonic Minor</option>
+                        <option value="melodic-minor">Melodic Minor</option>
+                        
+                        <!-- Modes -->
+                        <option value="dorian">Dorian</option>
+                        <option value="phrygian">Phrygian</option>
+                        <option value="lydian">Lydian</option>
+                        <option value="mixolydian">Mixolydian</option>
+                        <option value="locrian">Locrian</option>
+                        
+                        <!-- Pentatonic Keys -->
+                        <option value="major-pentatonic">Major Pentatonic</option>
+                        <option value="minor-pentatonic">Minor Pentatonic</option>
+                        <option value="blues">Blues</option>
+                        
+                        <!-- Symmetric Keys -->
+                        <option value="chromatic">Chromatic</option>
+                        <option value="whole-tone">Whole Tone</option>
+                        <option value="diminished">Diminished (Octatonic)</option>
+                        
+                        <!-- Exotic Keys -->
+                        <option value="hungarian-minor">Hungarian Minor</option>
+                        <option value="hungarian-major">Hungarian Major</option>
+                        <option value="persian">Persian</option>
+                        <option value="byzantine">Byzantine</option>
+                        <option value="arabic">Arabic</option>
+                        <option value="egyptian">Egyptian</option>
+                        <option value="japanese">Japanese (In)</option>
+                        <option value="chinese">Chinese (Pentatonic)</option>
+                        
+                        <!-- Jazz Keys -->
+                        <option value="bebop-major">Bebop Major</option>
+                        <option value="bebop-dominant">Bebop Dominant</option>
+                        <option value="bebop-minor">Bebop Minor</option>
+                        <option value="lydian-dominant">Lydian Dominant</option>
+                        <option value="altered">Altered</option>
+                        <option value="locrian-natural2">Locrian Natural 2</option>
+                        
+                        <!-- Neapolitan Keys -->
+                        <option value="neapolitan-major">Neapolitan Major</option>
+                        <option value="neapolitan-minor">Neapolitan Minor</option>
+                        
+                        <!-- Synthetic Keys -->
+                        <option value="enigmatic">Enigmatic</option>
+                        <option value="double-harmonic">Double Harmonic</option>
+                        <option value="overtone">Overtone</option>
+                        <option value="leading-whole-tone">Leading Whole Tone</option>
+                        <option value="augmented">Augmented</option>
+                        <option value="prometheus">Prometheus</option>
+                        <option value="tritone">Tritone</option>
+                    </select>
+                </div>
+                <div class="modal-actions">
+                    <button id="apply-key-selection" class="btn btn-primary">Apply</button>
+                    <button id="cancel-key-selection" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Chord Selector Modal -->
+    <div id="chord-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Select Chord</h3>
+                <button id="close-chord-modal" class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="chord-selector-controls">
+                    <select id="modal-chordRootSelect" class="chord-select">
+                        <option value="C">C</option>
+                        <option value="C#/Db">C#/Db</option>
+                        <option value="D">D</option>
+                        <option value="D#/Eb">D#/Eb</option>
+                        <option value="E">E</option>
+                        <option value="F">F</option>
+                        <option value="F#/Gb">F#/Gb</option>
+                        <option value="G">G</option>
+                        <option value="G#/Ab">G#/Ab</option>
+                        <option value="A">A</option>
+                        <option value="A#/Bb">A#/Bb</option>
+                        <option value="B">B</option>
+                    </select>
+                    <select id="modal-chordTypeSelect" class="chord-select">
+                        <option value="maj7">Major 7th</option>
+                        <option value="maj">Major</option>
+                        <option value="min7">Minor 7th</option>
+                        <option value="min">Minor</option>
+                        <option value="7">Dominant 7th</option>
+                        <option value="dim">Diminished</option>
+                        <option value="dim7">Diminished 7th</option>
+                        <option value="aug">Augmented</option>
+                        <option value="maj7#5">Major 7th #5</option>
+                        <option value="min7b5">Minor 7th b5</option>
+                        <option value="7b9">Dominant 7th b9</option>
+                        <option value="7#9">Dominant 7th #9</option>
+                        <option value="maj9">Major 9th</option>
+                        <option value="min9">Minor 9th</option>
+                        <option value="9">Dominant 9th</option>
+                        <option value="maj11">Major 11th</option>
+                        <option value="min11">Minor 11th</option>
+                        <option value="11">Dominant 11th</option>
+                        <option value="maj13">Major 13th</option>
+                        <option value="min13">Minor 13th</option>
+                        <option value="13">Dominant 13th</option>
+                    </select>
+                </div>
+                <div class="modal-actions">
+                    <button id="apply-chord-selection" class="btn btn-primary">Apply</button>
+                    <button id="cancel-chord-selection" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Sequence Selector Modal -->
+    <div id="sequence-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Select Saved Sequence</h3>
+                <button id="close-sequence-modal" class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="sequence-list" class="sequence-list">
+                    <!-- Sequence buttons will be generated dynamically -->
+                </div>
+                <div class="modal-actions">
+                    <button id="cancel-sequence-selection" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://unpkg.com/tone@14.7.77/build/Tone.js"></script>
+    <script type="module" src="{% static 'script.js' %}?v=22"></script>
+    <script type="module" src="{% static 'chatbot.js' %}?v=22"></script>
+    <script src="{% static 'auth-ui.js' %}?v=22"></script>
+</body>
+</html> 
