@@ -1083,6 +1083,45 @@ body {
     to   { transform: translateY(0); }
 }
 
+/* Tactile press feedback — every tappable element scales down and
+   darkens slightly while the user is holding it, then springs back on
+   release. iOS Safari fires :active on buttons by default, but we also
+   apply it to a few container-style elements that act as buttons. */
+.btn:active,
+button:active,
+.info-key:active,
+.info-chord:active,
+.info-play-key:active,
+.info-play-chord:active,
+.info-play-mode:active,
+.info-grid-labels:active,
+.info-clear:active,
+.info-toggle-clones:active,
+.info-more:active,
+.btn-chord:active,
+.btn-chord-alternate:active,
+.btn-toggle:active,
+.more-sheet-close:active,
+.modal-close:active,
+.sequence-item-btn:active,
+.btn-google:active,
+.btn-github:active,
+.btn-email:active {
+    transform: scale(0.95) !important;
+    filter: brightness(0.78);
+    transition: transform 0.04s ease-out, filter 0.04s ease-out !important;
+}
+
+/* Cells get a parallel `.pressing` class managed in script.js — touch
+   events on the inner tapTarget toggle it on the parent cell so the
+   diamond visibly depresses while the finger is down. */
+#grid-container div.pressing {
+    transform: scale(0.85);
+    filter: brightness(0.72);
+    transition: transform 0.04s ease-out, filter 0.04s ease-out;
+    z-index: 11;
+}
+
 /* Grid canvas — a positioning context wrapper around #grid-container.
    On desktop it is transparent and full-bleed inside .grid-wrapper, so the
    grid keeps its original centered-absolute layout. On phones it becomes

@@ -1392,7 +1392,25 @@ class MusicalGrid {
             const gx = parseInt(target.dataset.gridX, 10);
             const gy = parseInt(target.dataset.gridY, 10);
             if (!note || Number.isNaN(octave)) return null;
-            return { note, octave, gx, gy, key: `${gx}:${gy}` };
+            // The tapTarget is the touch-receiver; the cell wrapper (parent)
+            // is what we apply the visual `.pressing` class to so the whole
+            // diamond depresses, not just the invisible overlay.
+            const cellEl = target.parentElement && target.parentElement.dataset.gridX === target.dataset.gridX
+                ? target.parentElement
+                : target;
+            return { note, octave, gx, gy, key: `${gx}:${gy}`, cellEl };
+        };
+
+        // Track which cell is currently displaying the press-down style so
+        // we can swap it as the finger moves and clear it on release. Used
+        // for visual feedback across ALL playModes (tap-chords still wants
+        // the press effect even though its audio fires on release).
+        let pressedCellEl = null;
+        const setPressedCell = (next) => {
+            if (pressedCellEl === next) return;
+            if (pressedCellEl) pressedCellEl.classList.remove('pressing');
+            if (next) next.classList.add('pressing');
+            pressedCellEl = next;
         };
 
         const stopDragPlay = () => {
@@ -1405,6 +1423,7 @@ class MusicalGrid {
                 this.currentlyHoveredOctave = null;
             }
             this.isDragging = false;
+            setPressedCell(null);
         };
 
         const onStart = (e) => {
@@ -1416,7 +1435,16 @@ class MusicalGrid {
                 initialZoom = this.gridZoom;
                 initialCentroid = centroid(e.touches[0], e.touches[1]);
                 initialPan = { x: this.gridPanX, y: this.gridPanY };
-            } else if (e.touches.length === 1 && this.playMode === 'tap-notes') {
+                return;
+            }
+            if (e.touches.length === 1) {
+                // Visual press feedback fires in EVERY mode — tap-chords and
+                // draw-chords also want the depressed-diamond feel even
+                // though their audio is wired to the click event.
+                const initialHit = cellAtPoint(e.touches[0].clientX, e.touches[0].clientY);
+                if (initialHit) setPressedCell(initialHit.cellEl);
+            }
+            if (e.touches.length === 1 && this.playMode === 'tap-notes') {
                 // One finger in tap-notes mode. Only take over the touch if
                 // it actually landed on a grid cell — otherwise the touch
                 // might be on the Clear / mode / labels buttons that share
@@ -1453,6 +1481,14 @@ class MusicalGrid {
                 this.applyGridTransform();
                 return;
             }
+            if (e.touches.length === 1) {
+                // Update press-down visual every move so the depress
+                // follows the finger across cells (even when not in
+                // tap-notes drag-play mode).
+                const t = e.touches[0];
+                const moveHit = cellAtPoint(t.clientX, t.clientY);
+                setPressedCell(moveHit ? moveHit.cellEl : null);
+            }
             if (e.touches.length === 1 && dragPlayActive) {
                 const t = e.touches[0];
                 const hit = cellAtPoint(t.clientX, t.clientY);
@@ -1477,8 +1513,9 @@ class MusicalGrid {
                 initialDist = null;
             }
             if (e.touches.length === 0) {
-                // All fingers up — release any drag-play note.
+                // All fingers up — release any drag-play note + press-down.
                 stopDragPlay();
+                setPressedCell(null);
             }
         };
 
