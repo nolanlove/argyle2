@@ -1603,10 +1603,17 @@ class MusicalGrid {
 
         const open = () => {
             moveSectionsIntoSheet();
+            // Bypass the [hidden] attribute path entirely — set display
+            // and the open class so CSS we control owns the visibility.
             sheet.hidden = false;
+            sheet.removeAttribute('hidden');
+            sheet.style.display = 'block';
+            sheet.classList.add('is-open');
             document.body.classList.add('more-sheet-open');
         };
         const close = () => {
+            sheet.classList.remove('is-open');
+            sheet.style.display = 'none';
             sheet.hidden = true;
             document.body.classList.remove('more-sheet-open');
             returnSectionsToMain();
