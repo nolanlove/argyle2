@@ -1210,11 +1210,10 @@ body {
         touch-action: none;
     }
 
-    /* JS still writes the rotate(-45deg) inline; CSS doesn't need to add
-       scale() because cellSize is computed from the canvas size now. */
-    #grid-container {
-        transform: rotate(-45deg) !important;
-    }
+    /* The grid container's transform is fully controlled by JS now
+       (rotate composed with pan + zoom in applyGridTransform). Do NOT add
+       an !important transform here — it would override the inline style
+       the gesture handler writes and silently break pinch-zoom/pan. */
 
     /* Bottom-row action buttons. Reset all the absolute placements that
        the desktop layout sets and let them flow as grid items. */
