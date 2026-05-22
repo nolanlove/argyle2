@@ -1596,6 +1596,16 @@ class MusicalGrid {
                 'padding:4px 8px;pointer-events:none;white-space:nowrap;overflow:hidden';
             bar.textContent = 'tap target: (none yet)';
             document.body.appendChild(bar);
+            // Also show viewport + More button bounding box.
+            setTimeout(() => {
+                const moreBtn = document.getElementById('moreSheetToggle');
+                const wrap = document.querySelector('.grid-wrapper');
+                const moreRect = moreBtn ? moreBtn.getBoundingClientRect() : null;
+                const wrapRect = wrap ? wrap.getBoundingClientRect() : null;
+                bar.textContent = `vw=${window.innerWidth}x${window.innerHeight}` +
+                    ` more=${moreRect ? `${Math.round(moreRect.x)},${Math.round(moreRect.y)} ${Math.round(moreRect.width)}x${Math.round(moreRect.height)}` : 'null'}` +
+                    ` wrap=${wrapRect ? `${Math.round(wrapRect.x)},${Math.round(wrapRect.y)} ${Math.round(wrapRect.width)}x${Math.round(wrapRect.height)}` : 'null'}`;
+            }, 400);
             const updateBar = (e) => {
                 const t = e.target;
                 if (!t) return;
