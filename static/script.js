@@ -1417,24 +1417,24 @@ class MusicalGrid {
                 initialCentroid = centroid(e.touches[0], e.touches[1]);
                 initialPan = { x: this.gridPanX, y: this.gridPanY };
             } else if (e.touches.length === 1 && this.playMode === 'tap-notes') {
-                // One finger in tap-notes mode — start drag-play and play
-                // the initial cell immediately. Without this, iOS only
-                // synthesizes mousedown if the touch ends as a tap (no
-                // drag), so a touch-then-drag would skip the first note.
-                // preventDefault here also suppresses the synthesized
-                // mouse events, so the tapTarget's mousedown handler
-                // doesn't double-trigger on the same finger-down.
+                // One finger in tap-notes mode. Only take over the touch if
+                // it actually landed on a grid cell — otherwise the touch
+                // might be on the Clear / mode / labels buttons that share
+                // the wrapper's bubble path, and preventDefault would
+                // swallow their click.
+                const t = e.touches[0];
+                const hit = cellAtPoint(t.clientX, t.clientY);
+                if (!hit) return;
+                // preventDefault suppresses the synthesized mousedown so the
+                // tapTarget's existing handler doesn't double-trigger the
+                // same note on touch-end.
                 e.preventDefault();
                 dragPlayActive = true;
                 this.isDragging = true;
-                const t = e.touches[0];
-                const hit = cellAtPoint(t.clientX, t.clientY);
-                if (hit) {
-                    lastDragCellKey = hit.key;
-                    this.tapNote(hit.note, hit.octave, this.sustainPedalActive, performance.now());
-                    this.currentlyHoveredNote = hit.note;
-                    this.currentlyHoveredOctave = hit.octave;
-                }
+                lastDragCellKey = hit.key;
+                this.tapNote(hit.note, hit.octave, this.sustainPedalActive, performance.now());
+                this.currentlyHoveredNote = hit.note;
+                this.currentlyHoveredOctave = hit.octave;
             }
         };
 
