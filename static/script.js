@@ -1488,6 +1488,44 @@ class MusicalGrid {
         wrapper.addEventListener('touchcancel', onEnd);
     }
 
+    // Minimal localStorage persistence for the user's mode + label mode
+    // preferences — survives reload so re-opening the PWA picks up where
+    // the user left off. Key/chord state is intentionally NOT persisted
+    // yet because the chord selection is tied to a multi-coordinate Set
+    // that needs a more careful migration story.
+    saveSimplePrefs() {
+        try {
+            localStorage.setItem('argyle.prefs', JSON.stringify({
+                playMode: this.playMode,
+                gridLabelMode: this.gridLabelMode,
+                cloneMode: this.cloneMode,
+            }));
+        } catch (e) {
+            // Quota / private-browsing — silently ignore.
+        }
+    }
+
+    restoreSimplePrefs() {
+        try {
+            const raw = localStorage.getItem('argyle.prefs');
+            if (!raw) return;
+            const prefs = JSON.parse(raw);
+            if (prefs.playMode && ['tap-notes', 'tap-chords', 'draw-chords'].includes(prefs.playMode)) {
+                this.playMode = prefs.playMode;
+                const btn = document.getElementById('playModeToggle');
+                if (btn) btn.textContent = this.getPlayModeDisplayName(this.playMode);
+            }
+            if (prefs.gridLabelMode && ['relative', 'absolute', 'roman', 'none'].includes(prefs.gridLabelMode)) {
+                this.gridLabelMode = prefs.gridLabelMode;
+            }
+            if (typeof prefs.cloneMode === 'number' && [0, 1, 2].includes(prefs.cloneMode)) {
+                this.cloneMode = prefs.cloneMode;
+            }
+        } catch (e) {
+            // Bad JSON — fall back to defaults.
+        }
+    }
+
     // The mobile More sheet hosts the Sequencer, Tuner, Chord buttons,
     // Note Detection, and Settings sections — pieces that script.js
     // injects into `.main` for the desktop layout. On mobile they're
@@ -2249,6 +2287,7 @@ class MusicalGrid {
         this.setupMusicalInterface();
         this.bindMusicalEvents();
         this.setupMoreSheet();
+        this.restoreSimplePrefs();
         
         // Set default selections BEFORE creating grid visualization
         this.setDefaultSelections();
@@ -3312,10 +3351,11 @@ class MusicalGrid {
                 const currentIndex = modes.indexOf(this.playMode);
                 const nextIndex = (currentIndex + 1) % modes.length;
                 this.playMode = modes[nextIndex];
-                
+
                 // Update button text
                 playModeToggle.textContent = this.getPlayModeDisplayName(this.playMode);
-                
+                this.saveSimplePrefs();
+
                 // Show notification
                 // this.showNotification(`Play mode changed to: ${this.playMode}`, 'info');
             });
@@ -3333,6 +3373,7 @@ class MusicalGrid {
                 
                 // Update grid label mode
                 this.gridLabelMode = nextMode;
+                this.saveSimplePrefs();
                 this.createGridVisualization(); // Redraw grid with new labels
                 
                 // Show notification with appropriate text
@@ -3481,6 +3522,7 @@ class MusicalGrid {
             toggleClonesBtn.addEventListener('click', () => {
                 // Cycle through three states: 0=hide, 1=show clones, 2=show all octaves
                 this.cloneMode = (this.cloneMode + 1) % 3;
+                this.saveSimplePrefs();
         
                 
                 // Button always says "Clones" but behavior changes
