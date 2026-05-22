@@ -992,6 +992,91 @@ body {
         inset 0 0 0 1px rgba(107, 114, 128, 0.3) !important;
 }
 
+/* The "More" trigger is mobile-only. On desktop it's hidden; on mobile
+   the bottom-bar block below assigns it grid-column 4 (replacing the
+   Clones slot — Clones moves into the More sheet). */
+.info-more { display: none; }
+
+/* Slide-up sheet that hosts Sequencer / Tuner / Chord buttons / Settings
+   on mobile. Desktop never opens it. */
+.more-sheet[hidden] { display: none !important; }
+.more-sheet {
+    position: fixed;
+    inset: 0;
+    z-index: 1500;
+}
+.more-sheet-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(2, 6, 23, 0.55);
+    backdrop-filter: blur(4px);
+    animation: more-sheet-fade-in 0.2s ease-out;
+}
+.more-sheet-panel {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-height: 88vh;
+    max-height: 88dvh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+    border-radius: 24px 24px 0 0;
+    border-top: 1px solid rgba(148, 163, 184, 0.18);
+    box-shadow: 0 -16px 48px rgba(0, 0, 0, 0.55);
+    padding: 6px 16px max(16px, env(safe-area-inset-bottom, 16px));
+    animation: more-sheet-slide-up 0.28s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.more-sheet-handle {
+    width: 44px;
+    height: 4px;
+    background: rgba(148, 163, 184, 0.4);
+    border-radius: 2px;
+    margin: 8px auto 12px;
+}
+.more-sheet-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    padding: 0 4px;
+}
+.more-sheet-header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #f8fafc;
+}
+.more-sheet-close {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 0;
+    background: rgba(148, 163, 184, 0.15);
+    color: #f8fafc;
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+}
+.more-sheet-close:hover {
+    background: rgba(148, 163, 184, 0.25);
+}
+.more-sheet-body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding-bottom: 12px;
+}
+@keyframes more-sheet-fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+@keyframes more-sheet-slide-up {
+    from { transform: translateY(100%); }
+    to   { transform: translateY(0); }
+}
+
 /* Grid canvas — a positioning context wrapper around #grid-container.
    On desktop it is transparent and full-bleed inside .grid-wrapper, so the
    grid keeps its original centered-absolute layout. On phones it becomes
@@ -1045,11 +1130,28 @@ body {
         padding: 0;
     }
 
-    /* The .musical-section (Chords/Sequencer panels) is dynamically
-       injected by script.js for the desktop layout. Hide it on mobile. */
-    .musical-section,
-    .grid-controls {
+    /* The .musical-section is dynamically injected by script.js. On
+       mobile it lives inside the More sheet; when not inside the sheet,
+       hide it. The sheet body is `#moreSheetBody` — anything inside that
+       container shows, anything outside (i.e. still attached to .main)
+       stays hidden. */
+    main.main .musical-section,
+    main.main .grid-controls {
         display: none !important;
+    }
+    /* Inside the sheet, restyle the existing desktop-tuned section for
+       a single-column phone layout. */
+    #moreSheetBody .musical-section,
+    #moreSheetBody .grid-controls {
+        display: block !important;
+        position: static;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        box-shadow: none;
+        backdrop-filter: none;
+        border-radius: 0;
     }
 
     .grid-wrapper {
@@ -1247,8 +1349,40 @@ body {
 
     .info-play-mode    { grid-column: 1; grid-row: 3; }
     .info-grid-labels  { grid-column: 2; grid-row: 3; }
-    .info-toggle-clones{ grid-column: 3; grid-row: 3; }
-    .info-clear        { grid-column: 4; grid-row: 3; }
+    .info-clear        { grid-column: 3; grid-row: 3; }
+    /* "Clones" moves into the More sheet on mobile — its 4th-column slot
+       is taken by the More button which exposes the full set of sections. */
+    .info-toggle-clones { display: none !important; }
+    .info-more {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        grid-column: 4;
+        grid-row: 3;
+        position: static !important;
+        min-width: 0;
+        width: 100%;
+        height: 40px;
+        margin: 0;
+        padding: 0 8px;
+        font-size: 12px;
+        font-weight: 600;
+        text-align: center;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        border-radius: 12px;
+        backdrop-filter: blur(12px);
+    }
+}
+
+/* Phone — small width override for the More button. */
+@media (max-width: 420px) {
+    .info-more {
+        font-size: 11px;
+        height: 36px;
+        padding: 0 6px;
+    }
 }
 
 /* Phone — small width. Tighter type. */

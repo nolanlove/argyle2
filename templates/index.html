@@ -32,7 +32,7 @@
     
     <!-- Web App Manifest -->
     <link rel="manifest" href="{% static 'manifest.json' %}">
-    <link rel="stylesheet" href="{% static 'styles.css' %}?v=36">
+    <link rel="stylesheet" href="{% static 'styles.css' %}?v=37">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -117,6 +117,8 @@
                     <button class="btn btn-secondary info-grid-labels" id="gridLabelsToggle">Grid Labels</button>
                     <button class="btn btn-secondary info-clear" id="clearMusical">Clear</button>
                     <button class="btn btn-secondary info-toggle-clones" id="toggleClones">Clones</button>
+                    <!-- Mobile-only entry point to the slide-up More sheet. -->
+                    <button class="btn btn-secondary info-more" id="moreSheetToggle" aria-label="More options">More</button>
                 </div>
                 <div class="grid-canvas">
                     <div id="grid-container"></div>
@@ -124,7 +126,25 @@
             </div>
         </main>
     </div>
-    
+
+    <!-- Slide-up "More" sheet for mobile. Hosts the Sequencer, Tuner,
+         Chord buttons, Note Detection, and Settings sections that don't
+         fit in the always-visible bottom bar. Hidden on desktop by CSS. -->
+    <div id="more-sheet" class="more-sheet" hidden>
+        <div class="more-sheet-backdrop" id="moreSheetBackdrop"></div>
+        <div class="more-sheet-panel">
+            <div class="more-sheet-handle"></div>
+            <div class="more-sheet-header">
+                <h2>More</h2>
+                <button class="more-sheet-close" id="moreSheetClose" aria-label="Close">&times;</button>
+            </div>
+            <div class="more-sheet-body" id="moreSheetBody">
+                <!-- The .musical-section dynamically created by script.js
+                     is moved here when the sheet opens on mobile. -->
+            </div>
+        </div>
+    </div>
+
     <!-- Key Selector Modal -->
     <div id="key-modal" class="modal" style="display: none;">
         <div class="modal-content">
@@ -286,8 +306,8 @@
     </div>
     
     <script src="https://unpkg.com/tone@14.7.77/build/Tone.js"></script>
-    <script type="module" src="{% static 'script.js' %}?v=36"></script>
-    <script type="module" src="{% static 'chatbot.js' %}?v=36"></script>
-    <script src="{% static 'auth-ui.js' %}?v=36"></script>
+    <script type="module" src="{% static 'script.js' %}?v=37"></script>
+    <script type="module" src="{% static 'chatbot.js' %}?v=37"></script>
+    <script src="{% static 'auth-ui.js' %}?v=37"></script>
 </body>
 </html> 

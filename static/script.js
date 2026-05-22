@@ -1488,6 +1488,61 @@ class MusicalGrid {
         wrapper.addEventListener('touchcancel', onEnd);
     }
 
+    // The mobile More sheet hosts the Sequencer, Tuner, Chord buttons,
+    // Note Detection, and Settings sections — pieces that script.js
+    // injects into `.main` for the desktop layout. On mobile they're
+    // hidden until the user taps the More button; this method wires the
+    // open/close interactions and reparents the sections into the sheet
+    // body so they actually become visible there.
+    setupMoreSheet() {
+        const sheet = document.getElementById('more-sheet');
+        const toggle = document.getElementById('moreSheetToggle');
+        const closeBtn = document.getElementById('moreSheetClose');
+        const backdrop = document.getElementById('moreSheetBackdrop');
+        const body = document.getElementById('moreSheetBody');
+        if (!sheet || !toggle || !closeBtn || !backdrop || !body) return;
+
+        const mainEl = document.querySelector('main.main');
+
+        const moveSectionsIntoSheet = () => {
+            // Pull every musical-section + grid-controls block out of
+            // .main and append to the sheet body. They're identified by
+            // class so future-injected sections also get picked up.
+            document.querySelectorAll('main.main .musical-section, main.main .grid-controls')
+                .forEach(el => body.appendChild(el));
+        };
+
+        const returnSectionsToMain = () => {
+            // For symmetry on desktop / sheet-close — put them back in
+            // .main in the order they appeared. Order is good enough as
+            // appendChild order; the script-side state isn't position-
+            // dependent.
+            if (!mainEl) return;
+            body.querySelectorAll('.musical-section, .grid-controls')
+                .forEach(el => mainEl.appendChild(el));
+        };
+
+        const open = () => {
+            moveSectionsIntoSheet();
+            sheet.hidden = false;
+            document.body.classList.add('more-sheet-open');
+        };
+        const close = () => {
+            sheet.hidden = true;
+            document.body.classList.remove('more-sheet-open');
+            returnSectionsToMain();
+        };
+
+        toggle.addEventListener('click', open);
+        closeBtn.addEventListener('click', close);
+        backdrop.addEventListener('click', close);
+        // Esc closes the sheet too — handy if the user is also on a
+        // keyboard-equipped device.
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !sheet.hidden) close();
+        });
+    }
+
     updateGridDimensionsForViewport() {
         const vw = window.innerWidth;
         // Match the @media (max-width: 900px) breakpoint in styles.css —
@@ -2148,9 +2203,10 @@ class MusicalGrid {
         // Clear the current song name on page load to start fresh each session
         this.currentSongName = null;
 
-        
+
         this.setupMusicalInterface();
         this.bindMusicalEvents();
+        this.setupMoreSheet();
         
         // Set default selections BEFORE creating grid visualization
         this.setDefaultSelections();
