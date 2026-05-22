@@ -14,8 +14,15 @@ class MusicalGrid {
         // target rectangle. The underlying logical grid is much bigger
         // than what's drawn — it must extend far enough that the cells at
         // the rectangle's corners exist to be tested.
-        this.gridWidth = 20;
-        this.gridHeight = 20;
+        // Underlying grid is 40×40 so that even at minimum zoom (0.4×) the
+        // rotated diamond bbox still covers the full mobile canvas — at
+        // 20×20 the diamond was smaller than the viewport when zoomed out
+        // and the canvas revealed the rotated shape instead of a clean
+        // rectangle. Cells outside the visibility rect (and any with pitch
+        // out of MIDI range) render as visibility:hidden, so the extra
+        // cells cost essentially nothing.
+        this.gridWidth = 40;
+        this.gridHeight = 40;
         this.gridSize = this.gridWidth; // legacy
         this.grid = this.createGrid(this.gridWidth, this.gridHeight);
         // Visible rectangle (in pixels, axis-aligned in screen space) and
@@ -1454,8 +1461,13 @@ class MusicalGrid {
             const targetAcross = w < 380 ? 4 : w < 600 ? 5 : 7;
             const computed = Math.round(w / targetAcross / Math.SQRT2);
             this.cellSize = Math.max(44, Math.min(110, computed));
-            this.visibleRectW = w;
-            this.visibleRectH = h;
+            // Visible rect: scale up by 1/minZoom so that even at the most
+            // zoomed-out level the rect still projects to ≥ canvas size in
+            // screen space — keeps the rendered area visually rectangular
+            // instead of revealing the underlying diamond bounding box.
+            const slack = 1 / (this.minGridZoom || 0.4);
+            this.visibleRectW = Math.round(w * slack);
+            this.visibleRectH = Math.round(h * slack);
         } else {
             this.cellSize = 50;
             this.visibleRectW = 720;
@@ -1534,22 +1546,20 @@ class MusicalGrid {
         const halfDiag = cellSize * SQRT_HALF;
         const cgx = dims.width / 2;
         const cgy = dims.height / 2;
-        // On mobile we allow pinch-zoom and pan, so every cell needs to be
-        // in the DOM up front — otherwise panning would reveal blank space.
-        // The .grid-canvas already has overflow: hidden to clip what's
-        // outside the viewport.
-        const isMobile = window.innerWidth <= 900;
-        const isCellVisible = isMobile
-            ? () => true
-            : (gx, gy) => {
-                const a = gx + 0.5 - cgx;
-                const b = gy + 0.5 - cgy;
-                const rx = SQRT_HALF * cellSize * (a + b);
-                const ry = SQRT_HALF * cellSize * (b - a);
-                const dx = Math.max(0, Math.abs(rx) - rectW / 2);
-                const dy = Math.max(0, Math.abs(ry) - rectH / 2);
-                return dx < halfDiag && dy < halfDiag;
-            };
+        // The visibility filter keeps the rendered area visually
+        // rectangular (rather than revealing the underlying rotated diamond
+        // when zoomed out). On mobile the rect is pre-scaled by 1/minZoom
+        // in updateGridDimensionsForViewport(), so it still covers the
+        // canvas at maximum zoom-out and we never re-render on zoom.
+        const isCellVisible = (gx, gy) => {
+            const a = gx + 0.5 - cgx;
+            const b = gy + 0.5 - cgy;
+            const rx = SQRT_HALF * cellSize * (a + b);
+            const ry = SQRT_HALF * cellSize * (b - a);
+            const dx = Math.max(0, Math.abs(rx) - rectW / 2);
+            const dy = Math.max(0, Math.abs(ry) - rectH / 2);
+            return dx < halfDiag && dy < halfDiag;
+        };
         this._cellVisibility = isCellVisible;
 
         // Render from bottom to top (y=49 to y=0) so origin is at bottom left
