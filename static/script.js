@@ -1364,10 +1364,14 @@ class MusicalGrid {
         if (!wrapper || wrapper.dataset.gesturesWired === '1') return;
         wrapper.dataset.gesturesWired = '1';
 
+        // Two-finger pinch/pan state.
         let initialDist = null;
         let initialZoom = null;
         let initialCentroid = null;
         let initialPan = null;
+        // Single-finger drag-play state (tap-notes mode).
+        let dragPlayActive = false;
+        let lastDragCellKey = null;
 
         const dist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
         const centroid = (a, b) => ({
@@ -1375,13 +1379,53 @@ class MusicalGrid {
             y: (a.clientY + b.clientY) / 2,
         });
 
+        // Find the cell metadata under a touch point, if any.
+        const cellAtPoint = (clientX, clientY) => {
+            const el = document.elementFromPoint(clientX, clientY);
+            if (!el) return null;
+            const target = el.dataset && el.dataset.note
+                ? el
+                : (el.closest && el.closest('[data-note]'));
+            if (!target) return null;
+            const note = target.dataset.note;
+            const octave = parseInt(target.dataset.octave, 10);
+            const gx = parseInt(target.dataset.gridX, 10);
+            const gy = parseInt(target.dataset.gridY, 10);
+            if (!note || Number.isNaN(octave)) return null;
+            return { note, octave, gx, gy, key: `${gx}:${gy}` };
+        };
+
+        const stopDragPlay = () => {
+            if (!dragPlayActive) return;
+            dragPlayActive = false;
+            lastDragCellKey = null;
+            if (this.currentlyHoveredNote) {
+                this.releaseNote(this.currentlyHoveredNote, this.currentlyHoveredOctave);
+                this.currentlyHoveredNote = null;
+                this.currentlyHoveredOctave = null;
+            }
+            this.isDragging = false;
+        };
+
         const onStart = (e) => {
             if (e.touches.length === 2) {
+                // Pinch / pan takes over — bail out of any drag-play in flight.
+                stopDragPlay();
                 e.preventDefault();
                 initialDist = dist(e.touches[0], e.touches[1]);
                 initialZoom = this.gridZoom;
                 initialCentroid = centroid(e.touches[0], e.touches[1]);
                 initialPan = { x: this.gridPanX, y: this.gridPanY };
+            } else if (e.touches.length === 1 && this.playMode === 'tap-notes') {
+                // One finger in tap-notes mode — start drag-play. The
+                // existing mousedown handler on the cell tapTarget fires the
+                // first note via the touchstart→mousedown synth, so we just
+                // mark state here and watch for cell changes in onMove.
+                dragPlayActive = true;
+                this.isDragging = true;
+                const t = e.touches[0];
+                const hit = cellAtPoint(t.clientX, t.clientY);
+                if (hit) lastDragCellKey = hit.key;
             }
         };
 
@@ -1398,12 +1442,34 @@ class MusicalGrid {
                 this.gridPanX = initialPan.x + (c.x - initialCentroid.x);
                 this.gridPanY = initialPan.y + (c.y - initialCentroid.y);
                 this.applyGridTransform();
+                return;
+            }
+            if (e.touches.length === 1 && dragPlayActive) {
+                const t = e.touches[0];
+                const hit = cellAtPoint(t.clientX, t.clientY);
+                if (!hit) return;
+                if (hit.key === lastDragCellKey) return;
+                // Finger entered a new cell — release the previous note and
+                // tap the new one. tapNote handles audio start, releaseNote
+                // handles stop; both already exist for the desktop mouse
+                // drag path.
+                if (this.currentlyHoveredNote) {
+                    this.releaseNote(this.currentlyHoveredNote, this.currentlyHoveredOctave);
+                }
+                this.tapNote(hit.note, hit.octave, this.sustainPedalActive, performance.now());
+                this.currentlyHoveredNote = hit.note;
+                this.currentlyHoveredOctave = hit.octave;
+                lastDragCellKey = hit.key;
             }
         };
 
         const onEnd = (e) => {
             if (e.touches.length < 2) {
                 initialDist = null;
+            }
+            if (e.touches.length === 0) {
+                // All fingers up — release any drag-play note.
+                stopDragPlay();
             }
         };
 
@@ -1750,7 +1816,16 @@ class MusicalGrid {
                 const cloneText = isClone ? `, Clone ${cloneIndex}` : '';
                 
                 cell.title = `Position: (${x}, ${actualY}), Note: ${displayNote}${pitch.octave} (Pitch: ${pitch.pitch})${cloneText}${isKeyNote ? ', Key' : ''}${isChordNote ? ', Chord' : ''}`;
-                
+
+                // Stamp grid coords on both the cell and (below) the tapTarget
+                // so the touch drag-play handler can find them via
+                // document.elementFromPoint() and play notes as the finger
+                // moves over cells.
+                cell.dataset.gridX = String(x);
+                cell.dataset.gridY = String(actualY);
+                cell.dataset.note = note;
+                cell.dataset.octave = String(pitch.octave);
+
                 // Add circular tap target overlay AFTER all content is set
                 const tapTarget = document.createElement('div');
                 const tapTargetSize = cellSize; // 100% of cell size
@@ -1769,6 +1844,13 @@ class MusicalGrid {
                     pointer-events: auto;
                     opacity: 0;
                 `;
+                // Also stamp the tapTarget so elementFromPoint returns
+                // something with the metadata directly, without needing
+                // to walk up to the parent cell.
+                tapTarget.dataset.gridX = String(x);
+                tapTarget.dataset.gridY = String(actualY);
+                tapTarget.dataset.note = note;
+                tapTarget.dataset.octave = String(pitch.octave);
                 cell.appendChild(tapTarget);
                 
                 // Add mouse event handlers to the circular tap target
