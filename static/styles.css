@@ -1183,7 +1183,11 @@ body {
     }
 
     /* Grid canvas takes the middle row, full width. JS reads its
-       getBoundingClientRect() and sizes the diamond grid to fit. */
+       getBoundingClientRect() and sizes the diamond grid to fit.
+       `touch-action: none` lets the gesture handler in script.js own all
+       multi-finger touches on the canvas (pinch-zoom + pan) — the browser
+       won't try to do its own page zoom or scroll on top of them. Single-
+       finger taps still synthesize click events on the cells. */
     .grid-canvas {
         display: block;
         grid-column: 1 / -1;
@@ -1193,6 +1197,7 @@ body {
         height: 100%;
         overflow: hidden;
         z-index: 1;
+        touch-action: none;
     }
 
     /* JS still writes the rotate(-45deg) inline; CSS doesn't need to add

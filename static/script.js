@@ -25,6 +25,15 @@ class MusicalGrid {
         this.cellSize = 50;
         this.visibleRectW = 720;
         this.visibleRectH = 500;
+        // Touch gesture state: two-finger pinch sets `gridZoom`, two-finger
+        // drag sets `gridPanX/Y`. Applied as a CSS transform on top of the
+        // inline rotate(-45deg) — purely visual so we don't have to re-render
+        // mid-gesture. See applyGridTransform() and setupGridGestures().
+        this.gridZoom = 1.0;
+        this.gridPanX = 0;
+        this.gridPanY = 0;
+        this.minGridZoom = 0.4;
+        this.maxGridZoom = 3.0;
         this.updateGridDimensionsForViewport();
         // Re-render when the viewport crosses a breakpoint or rotates.
         window.addEventListener('resize', () => {
@@ -1327,6 +1336,79 @@ class MusicalGrid {
     // to fill the screen and cellSize is chosen so a comfortable number of
     // diamonds fit across the width — Nolan asked for the grid itself to
     // be the mobile UI, not a shrunken card.
+    // Compose the current pan/zoom on top of the inline rotate(-45deg) that
+    // createGridVisualization writes to the grid container. Called after each
+    // render and after each gesture frame. Pure CSS transform — no DOM work.
+    applyGridTransform() {
+        const grid = document.getElementById('grid-container');
+        if (!grid) return;
+        // Translate is leftmost so it acts in screen-space (applied after the
+        // rotation in CSS transform order). Scale composes with the existing
+        // rotate around transform-origin = center.
+        grid.style.transform =
+            `translate(${this.gridPanX}px, ${this.gridPanY}px) ` +
+            `rotate(-45deg) ` +
+            `scale(${this.gridZoom})`;
+    }
+
+    // Wire up two-finger pinch and two-finger pan on the grid canvas.
+    // One-finger touches pass through untouched so taps still play notes.
+    // Idempotent — safe to call after each createGridVisualization (we mark
+    // the canvas with a dataset flag and skip if it's already wired).
+    setupGridGestures() {
+        const canvas = document.querySelector('.grid-canvas');
+        if (!canvas || canvas.dataset.gesturesWired === '1') return;
+        canvas.dataset.gesturesWired = '1';
+
+        let initialDist = null;
+        let initialZoom = null;
+        let initialCentroid = null;
+        let initialPan = null;
+
+        const dist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+        const centroid = (a, b) => ({
+            x: (a.clientX + b.clientX) / 2,
+            y: (a.clientY + b.clientY) / 2,
+        });
+
+        const onStart = (e) => {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                initialDist = dist(e.touches[0], e.touches[1]);
+                initialZoom = this.gridZoom;
+                initialCentroid = centroid(e.touches[0], e.touches[1]);
+                initialPan = { x: this.gridPanX, y: this.gridPanY };
+            }
+        };
+
+        const onMove = (e) => {
+            if (e.touches.length === 2 && initialDist !== null) {
+                e.preventDefault();
+                const d = dist(e.touches[0], e.touches[1]);
+                const scale = d / initialDist;
+                this.gridZoom = Math.max(
+                    this.minGridZoom,
+                    Math.min(this.maxGridZoom, initialZoom * scale),
+                );
+                const c = centroid(e.touches[0], e.touches[1]);
+                this.gridPanX = initialPan.x + (c.x - initialCentroid.x);
+                this.gridPanY = initialPan.y + (c.y - initialCentroid.y);
+                this.applyGridTransform();
+            }
+        };
+
+        const onEnd = (e) => {
+            if (e.touches.length < 2) {
+                initialDist = null;
+            }
+        };
+
+        canvas.addEventListener('touchstart', onStart, { passive: false });
+        canvas.addEventListener('touchmove', onMove, { passive: false });
+        canvas.addEventListener('touchend', onEnd);
+        canvas.addEventListener('touchcancel', onEnd);
+    }
+
     updateGridDimensionsForViewport() {
         const vw = window.innerWidth;
         // Match the @media (max-width: 900px) breakpoint in styles.css —
@@ -1428,15 +1510,22 @@ class MusicalGrid {
         const halfDiag = cellSize * SQRT_HALF;
         const cgx = dims.width / 2;
         const cgy = dims.height / 2;
-        const isCellVisible = (gx, gy) => {
-            const a = gx + 0.5 - cgx;
-            const b = gy + 0.5 - cgy;
-            const rx = SQRT_HALF * cellSize * (a + b);
-            const ry = SQRT_HALF * cellSize * (b - a);
-            const dx = Math.max(0, Math.abs(rx) - rectW / 2);
-            const dy = Math.max(0, Math.abs(ry) - rectH / 2);
-            return dx < halfDiag && dy < halfDiag;
-        };
+        // On mobile we allow pinch-zoom and pan, so every cell needs to be
+        // in the DOM up front — otherwise panning would reveal blank space.
+        // The .grid-canvas already has overflow: hidden to clip what's
+        // outside the viewport.
+        const isMobile = window.innerWidth <= 900;
+        const isCellVisible = isMobile
+            ? () => true
+            : (gx, gy) => {
+                const a = gx + 0.5 - cgx;
+                const b = gy + 0.5 - cgy;
+                const rx = SQRT_HALF * cellSize * (a + b);
+                const ry = SQRT_HALF * cellSize * (b - a);
+                const dx = Math.max(0, Math.abs(rx) - rectW / 2);
+                const dy = Math.max(0, Math.abs(ry) - rectH / 2);
+                return dx < halfDiag && dy < halfDiag;
+            };
         this._cellVisibility = isCellVisible;
 
         // Render from bottom to top (y=49 to y=0) so origin is at bottom left
@@ -1914,6 +2003,11 @@ class MusicalGrid {
                 container.appendChild(cell);
             }
         }
+
+        // Re-apply any active pan/zoom on top of the freshly-written
+        // inline transform, then make sure the gesture handlers are wired.
+        this.applyGridTransform();
+        this.setupGridGestures();
     }
 
     // Get grid statistics
