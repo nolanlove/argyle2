@@ -1612,15 +1612,26 @@ class MusicalGrid {
             returnSectionsToMain();
         };
 
+        // Re-entrancy guard so click + touchend + pointerup synthesis don't
+        // open the sheet 3x for one tap.
+        let lastOpenTs = 0;
         const handleToggleEvent = (e) => {
+            const now = performance.now();
+            if (now - lastOpenTs < 300) {
+                if (e.type === 'touchend') e.preventDefault();
+                return;
+            }
+            lastOpenTs = now;
             console.log('[more-sheet] toggle activated', e.type);
-            // touchend would otherwise also fire a click — preventDefault on
-            // touchend suppresses that synth so we don't open twice.
             if (e.type === 'touchend') e.preventDefault();
             open();
         };
         toggle.addEventListener('click', handleToggleEvent);
         toggle.addEventListener('touchend', handleToggleEvent);
+        // pointerup as a uniform fallback — fires for both mouse and touch
+        // and isn't subject to the touchstart→preventDefault click-suppression
+        // path that the wrapper's gesture handler might trigger.
+        toggle.addEventListener('pointerup', handleToggleEvent);
         closeBtn.addEventListener('click', close);
         backdrop.addEventListener('click', close);
         // Esc closes the sheet too — handy if the user is also on a
