@@ -1329,20 +1329,27 @@ class MusicalGrid {
     // be the mobile UI, not a shrunken card.
     updateGridDimensionsForViewport() {
         const vw = window.innerWidth;
-        const vh = window.innerHeight;
         // Match the @media (max-width: 900px) breakpoint in styles.css —
         // iPad portrait (768/820px) gets the full-viewport layout because
         // the desktop layout's 1100px grid wrapper would overflow it.
         const isMobile = vw <= 900;
         if (isMobile) {
+            // Measure the .grid-canvas — its size is set by CSS Grid to the
+            // space between the top and bottom button bars. If the canvas
+            // hasn't been laid out yet (constructor before DOMContentLoaded),
+            // fall back to the viewport so we still pick a reasonable size.
+            const canvas = document.querySelector('.grid-canvas');
+            const rect = canvas ? canvas.getBoundingClientRect() : null;
+            const w = rect && rect.width > 0 ? Math.round(rect.width) : vw;
+            const h = rect && rect.height > 0 ? Math.round(rect.height) : window.innerHeight;
             // Diamond diagonal = cellSize * √2. Pick target diamonds-across
-            // based on viewport width so phones get big diamonds (~4-5 across)
+            // based on canvas width so phones get big diamonds (~4-5 across)
             // and tablets get more density (~7).
-            const targetAcross = vw < 380 ? 4 : vw < 600 ? 5 : 7;
-            const computed = Math.round(vw / targetAcross / Math.SQRT2);
+            const targetAcross = w < 380 ? 4 : w < 600 ? 5 : 7;
+            const computed = Math.round(w / targetAcross / Math.SQRT2);
             this.cellSize = Math.max(44, Math.min(110, computed));
-            this.visibleRectW = vw;
-            this.visibleRectH = vh;
+            this.visibleRectW = w;
+            this.visibleRectH = h;
         } else {
             this.cellSize = 50;
             this.visibleRectW = 720;

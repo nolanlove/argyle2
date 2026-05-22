@@ -32,7 +32,7 @@
     
     <!-- Web App Manifest -->
     <link rel="manifest" href="{% static 'manifest.json' %}">
-    <link rel="stylesheet" href="{% static 'styles.css' %}?v=24">
+    <link rel="stylesheet" href="{% static 'styles.css' %}?v=25">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -105,13 +105,17 @@
         <main class="main">
             <div class="grid-wrapper">
                 <div id="info-background">
-                    <button class="info-key" id="info-key">Key: C Major</button>
-                    <button class="btn info-play-key" id="playKeyInfo">▶ Play Scale</button>
+                    <div class="info-pair info-key-pair">
+                        <button class="btn info-play-key" id="playKeyInfo" aria-label="Play scale"><span class="play-icon">▶</span><span class="play-label"> Play Scale</span></button>
+                        <button class="info-key" id="info-key">Key: C Major</button>
+                    </div>
+                    <div class="info-pair info-chord-pair">
+                        <button class="btn info-chord" id="info-chord">Chord: None</button>
+                        <button class="btn info-play-chord" id="playChordInfo" aria-label="Play chord"><span class="play-icon">▶</span><span class="play-label"> Play Chord</span></button>
+                    </div>
                     <button class="btn btn-secondary info-play-mode" id="playModeToggle">Draw Chords</button>
                     <button class="btn btn-secondary info-grid-labels" id="gridLabelsToggle">Grid Labels</button>
-                    <button class="btn info-chord" id="info-chord">Chord: None</button>
                     <button class="btn btn-secondary info-clear" id="clearMusical">Clear</button>
-                    <button class="btn btn-secondary info-play-chord" id="playChordInfo">▶ Play Chord</button>
                     <button class="btn btn-secondary info-toggle-clones" id="toggleClones">Clones</button>
                 </div>
                 <div class="grid-canvas">
@@ -282,8 +286,8 @@
     </div>
     
     <script src="https://unpkg.com/tone@14.7.77/build/Tone.js"></script>
-    <script type="module" src="{% static 'script.js' %}?v=24"></script>
-    <script type="module" src="{% static 'chatbot.js' %}?v=24"></script>
-    <script src="{% static 'auth-ui.js' %}?v=24"></script>
+    <script type="module" src="{% static 'script.js' %}?v=25"></script>
+    <script type="module" src="{% static 'chatbot.js' %}?v=25"></script>
+    <script src="{% static 'auth-ui.js' %}?v=25"></script>
 </body>
 </html> 

@@ -18,6 +18,18 @@ input, textarea, [contenteditable="true"] {
     user-select: text;
 }
 
+/* Chatbot replies need to be copy-paste-able. The global rule above
+   blocks selection everywhere; this re-enables it inside the message
+   stream so users can grab a chord progression or key spec. */
+.chatbot-messages,
+.chatbot-messages * {
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+    user-select: text;
+    -webkit-touch-callout: default;
+}
+
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     line-height: 1.6;
@@ -982,20 +994,34 @@ body {
 
 /* Grid canvas — a positioning context wrapper around #grid-container.
    On desktop it is transparent and full-bleed inside .grid-wrapper, so the
-   grid keeps its original centered-absolute layout. On phones it becomes the
-   sized box that the scaled grid is centered in (see mobile media query). */
+   grid keeps its original centered-absolute layout. On phones it becomes
+   the sized box between the top and bottom button bars. */
 .grid-canvas {
     display: contents;
 }
 
+/* `.info-pair` wraps each Key+Play and Chord+Play pair so they can render
+   as a single split-pill on mobile. On desktop the wrapper is transparent
+   (display: contents) — children behave exactly as they did before. */
+.info-pair {
+    display: contents;
+}
+
+/* The play buttons split a leading icon from a trailing word label so we
+   can hide the word on mobile and keep only the ▶ affordance. */
+.play-icon { display: inline; }
+.play-label { display: inline; }
+
 /* Responsive design — phone + small tablet.
-   The argyle grid is the UI on small screens: it fills the entire
-   viewport and the eight info-* buttons sit as semi-transparent
-   overlays at the four viewport corners. The header is hidden (the app
-   is recognizable from its diamond pattern); the chatbot/auth chrome
-   already lives at the top corners via position:fixed. JS sizes the
-   grid via the matching updateGridDimensionsForViewport() so the
-   visible cells fill the viewport rather than being scaled down.
+   Layout splits the viewport into three rows:
+     1. Top bar: [▶ Key: …]  [Chord: … ▶]   (split-pill buttons)
+     2. Grid canvas: argyle grid fills the middle, never overlapped
+     3. Bottom bar: [Mode] [Labels] [Clones] [Clear]
+   The chatbot toggle (top-left) and auth icon (top-right) remain
+   position:fixed at the top corners; the wrapper's padding-top reserves
+   room below them so the top bar doesn't collide. updateGridDimensions-
+   ForViewport() in script.js measures the canvas (not the viewport) so
+   visibleRectH reflects only the middle row's actual height.
 
    Breakpoint at 900px so iPad portrait (768/820px) gets this layout —
    the desktop layout's 1100px grid wrapper would overflow on iPad. */
@@ -1019,13 +1045,8 @@ body {
         padding: 0;
     }
 
-    /* Full-viewport wrapper. The grid canvas fills it; the buttons overlay
-       at the corners with position:absolute. JS dynamically injects a
-       large `.musical-section` (Chords/Sequencer panels) as a sibling in
-       `.main` — that content is for the legacy desktop layout. On mobile we
-       want the grid to BE the screen, so we (a) hide the section and (b)
-       give the wrapper an explicit z-index so anything that might leak
-       through stays underneath. */
+    /* The .musical-section (Chords/Sequencer panels) is dynamically
+       injected by script.js for the desktop layout. Hide it on mobile. */
     .musical-section,
     .grid-controls {
         display: none !important;
@@ -1038,144 +1059,208 @@ body {
         height: 100vh;
         height: 100dvh;
         margin: 0;
-        display: block;
         z-index: 10;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        grid-template-rows: auto 1fr auto;
+        gap: 8px;
+        /* Top padding reserves space for the chatbot/auth icons that
+           live at top:12px (40px tall) plus iOS notch safe area. */
+        padding-top: calc(env(safe-area-inset-top, 0px) + 60px);
+        padding-right: max(12px, env(safe-area-inset-right, 0px));
+        padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+        padding-left: max(12px, env(safe-area-inset-left, 0px));
     }
 
+    /* Make #info-background transparent so its grandchildren (the .info-*
+       buttons inside .info-pair wrappers, plus the four standalone action
+       buttons) become direct grid items of .grid-wrapper. */
     #info-background {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
+        display: contents;
+        position: static;
         transform: none;
-        pointer-events: none;
-        z-index: 5;
     }
 
+    /* On mobile the wrappers become real flex pills. */
+    .info-pair {
+        display: flex;
+        flex-direction: row;
+        align-items: stretch;
+        height: 44px;
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.85) 0%, rgba(51, 65, 85, 0.7) 100%);
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        border-radius: 14px;
+        overflow: hidden;
+        backdrop-filter: blur(12px);
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+    }
+
+    .info-key-pair {
+        grid-column: 1 / 3;
+        grid-row: 1;
+    }
+
+    .info-chord-pair {
+        grid-column: 3 / 5;
+        grid-row: 1;
+    }
+
+    /* Inside a pair, kill the absolute-positioning that the desktop layout
+       set, and let flex divvy up the row. */
+    .info-pair .info-key,
+    .info-pair .info-chord,
+    .info-pair .info-play-key,
+    .info-pair .info-play-chord {
+        position: static !important;
+        top: auto !important;
+        right: auto !important;
+        bottom: auto !important;
+        left: auto !important;
+        min-width: 0;
+        height: 100%;
+        margin: 0;
+        border-radius: 0;
+        border: none;
+        box-shadow: none;
+        backdrop-filter: none;
+        background: transparent;
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1;
+        padding: 0 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: #f1f5f9;
+        cursor: pointer;
+    }
+
+    /* The play affordance is a fixed-width tab on the outer edge of the
+       pair, visually separated from the label by a vertical hairline.
+       The Key pair has its play tab on the LEFT; the Chord pair on the
+       RIGHT — matching the user's mental model of "play this thing." */
+    .info-pair .info-play-key,
+    .info-pair .info-play-chord {
+        flex: 0 0 44px;
+        padding: 0;
+        font-size: 14px;
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.35) 0%, rgba(29, 78, 216, 0.25) 100%);
+        color: white;
+    }
+
+    .info-key-pair .info-play-key {
+        border-right: 1px solid rgba(148, 163, 184, 0.25);
+    }
+
+    .info-chord-pair .info-play-chord {
+        border-left: 1px solid rgba(148, 163, 184, 0.25);
+        background: linear-gradient(135deg, rgba(5, 150, 105, 0.35) 0%, rgba(4, 120, 87, 0.25) 100%);
+    }
+
+    .info-pair .info-key,
+    .info-pair .info-chord {
+        flex: 1;
+        text-align: left;
+        justify-content: flex-start;
+    }
+
+    .info-chord-pair .info-chord {
+        text-align: right;
+        justify-content: flex-end;
+    }
+
+    .play-label { display: none; }
+
+    /* Active state — when the scale/chord is playing, the affordance turns
+       red (matches the existing .playing class behavior on desktop). */
+    .info-pair .info-play-key.playing,
+    .info-pair .info-play-chord.playing {
+        background: linear-gradient(135deg, #B22234 0%, #A02030 100%) !important;
+        color: white !important;
+    }
+
+    /* Grid canvas takes the middle row, full width. JS reads its
+       getBoundingClientRect() and sizes the diamond grid to fit. */
     .grid-canvas {
         display: block;
-        position: absolute;
-        inset: 0;
+        grid-column: 1 / -1;
+        grid-row: 2;
+        position: relative;
         width: 100%;
         height: 100%;
         overflow: hidden;
         z-index: 1;
     }
 
-    /* Cancel the desktop !important scale; JS controls grid size via
-       cellSize + visibleRectW/H now, so the inline rotate(-45deg) stays
-       and we don't need scale(). */
+    /* JS still writes the rotate(-45deg) inline; CSS doesn't need to add
+       scale() because cellSize is computed from the canvas size now. */
     #grid-container {
         transform: rotate(-45deg) !important;
     }
 
-    /* The eight info-* buttons become overlays at the four viewport
-       corners. Each has its own absolute placement; the shared block
-       below resets sizing/typography for touch. */
-    .info-key,
-    .info-play-key,
-    .info-grid-labels,
+    /* Bottom-row action buttons. Reset all the absolute placements that
+       the desktop layout sets and let them flow as grid items. */
     .info-play-mode,
-    .info-chord,
+    .info-grid-labels,
     .info-clear,
-    .info-play-chord,
     .info-toggle-clones {
-        position: absolute !important;
+        position: static !important;
+        top: auto !important;
+        right: auto !important;
+        bottom: auto !important;
+        left: auto !important;
         min-width: 0;
-        height: 36px;
-        padding: 8px 12px;
-        font-size: 11px;
-        line-height: 1.2;
-        pointer-events: auto;
-        backdrop-filter: blur(12px);
+        width: 100%;
+        height: 40px;
+        margin: 0;
+        padding: 0 8px;
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1.1;
+        text-align: center;
+        justify-content: center;
         white-space: nowrap;
-        max-width: 45vw;
         overflow: hidden;
         text-overflow: ellipsis;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        backdrop-filter: blur(12px);
     }
 
-    /* Reserve a top safe-area for chatbot toggle (left) and auth icon
-       (right). They're position:fixed at top:12px and ~40px tall, so
-       overlay buttons start at ~64px from the top. */
-    .info-key {
-        top: 64px !important;
-        left: 12px !important;
-        right: auto !important;
-        bottom: auto !important;
-    }
-    .info-chord {
-        top: 64px !important;
-        right: 12px !important;
-        left: auto !important;
-        bottom: auto !important;
-        text-align: right;
-        justify-content: flex-end;
-    }
-    .info-play-key {
-        top: 108px !important;
-        left: 12px !important;
-        right: auto !important;
-        bottom: auto !important;
-    }
-    .info-play-chord {
-        top: 108px !important;
-        right: 12px !important;
-        left: auto !important;
-        bottom: auto !important;
-    }
-    .info-grid-labels {
-        bottom: 60px !important;
-        left: 12px !important;
-        top: auto !important;
-        right: auto !important;
-    }
-    .info-play-mode {
-        bottom: 60px !important;
-        right: 12px !important;
-        top: auto !important;
-        left: auto !important;
-    }
-    .info-toggle-clones {
-        bottom: 16px !important;
-        left: 12px !important;
-        top: auto !important;
-        right: auto !important;
-    }
-    .info-clear {
-        bottom: 16px !important;
-        right: 12px !important;
-        top: auto !important;
-        left: auto !important;
-    }
+    .info-play-mode    { grid-column: 1; grid-row: 3; }
+    .info-grid-labels  { grid-column: 2; grid-row: 3; }
+    .info-toggle-clones{ grid-column: 3; grid-row: 3; }
+    .info-clear        { grid-column: 4; grid-row: 3; }
 }
 
-/* Phone — small width. Tighter overlay buttons. */
+/* Phone — small width. Tighter type. */
 @media (max-width: 420px) {
-    .info-key,
-    .info-play-key,
-    .info-grid-labels,
-    .info-play-mode,
-    .info-chord,
-    .info-clear,
-    .info-play-chord,
-    .info-toggle-clones {
-        font-size: 10.5px;
-        padding: 6px 10px;
-        height: 32px;
-        max-width: 44vw;
+    .info-pair {
+        height: 40px;
     }
 
-    .info-play-key {
-        top: 102px !important;
+    .info-pair .info-key,
+    .info-pair .info-chord {
+        font-size: 12px;
+        padding: 0 10px;
     }
-    .info-play-chord {
-        top: 102px !important;
+
+    .info-pair .info-play-key,
+    .info-pair .info-play-chord {
+        flex: 0 0 38px;
     }
-    .info-grid-labels {
-        bottom: 54px !important;
-    }
-    .info-play-mode {
-        bottom: 54px !important;
+
+    .info-play-mode,
+    .info-grid-labels,
+    .info-clear,
+    .info-toggle-clones {
+        font-size: 11px;
+        height: 36px;
+        padding: 0 6px;
     }
 } 
 
@@ -1804,10 +1889,10 @@ body {
 }
 
 /* Responsive design for chatbot */
-@media (max-width: 768px) {
+@media (max-width: 900px) {
     .chatbot-container {
-        top: 12px;
-        left: 12px;
+        top: calc(env(safe-area-inset-top, 0px) + 12px);
+        left: calc(env(safe-area-inset-left, 0px) + 12px);
     }
 
     /* Collapse the toggle to a round icon so it doesn't crowd the title. */
@@ -1859,6 +1944,14 @@ body {
   right: 20px;
   z-index: 1000;
   max-width: 300px;
+}
+
+/* PWA / mobile: respect the iPhone notch and home indicator. */
+@media (max-width: 900px) {
+  .auth-container {
+    top: calc(env(safe-area-inset-top, 0px) + 12px);
+    right: calc(env(safe-area-inset-right, 0px) + 12px);
+  }
 }
 
 /* Round person icon trigger (logged-out state). */
@@ -2181,6 +2274,13 @@ body.auth-modal-open { overflow: hidden; }
   border: none;
   box-shadow: none;
   padding: 0;
+}
+
+@media (max-width: 900px) {
+  .auth-user-info {
+    top: calc(env(safe-area-inset-top, 0px) + 12px);
+    right: calc(env(safe-area-inset-right, 0px) + 12px);
+  }
 }
 
 .user-profile {
