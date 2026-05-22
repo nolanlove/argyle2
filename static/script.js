@@ -1574,11 +1574,26 @@ class MusicalGrid {
                 // rectangle, or if its underlying pitch is out of MIDI range
                 // (which can happen for grid coordinates far from the origin).
                 const cellData = this.grid[actualY] && this.grid[actualY][x];
-                if (!isCellVisible(x, displayY) || !cellData || cellData.pitch == null) {
+                if (!isCellVisible(x, displayY)) {
+                    // Truly outside the visible region — render an invisible
+                    // placeholder so the CSS Grid layout slot stays correct.
                     const placeholder = document.createElement('div');
                     placeholder.style.visibility = 'hidden';
                     placeholder.dataset.outsideRect = '1';
                     container.appendChild(placeholder);
+                    continue;
+                }
+                if (!cellData || cellData.pitch == null) {
+                    // Inside the visible rect but the underlying pitch is out
+                    // of MIDI range. Render an inert tile so the grid looks
+                    // rectangular at low zoom — no label, no click target.
+                    const inert = document.createElement('div');
+                    inert.style.cssText =
+                        `width: ${cellSize}px; height: ${cellSize}px;` +
+                        `background: #e5e7eb; border-radius: 1px;` +
+                        `pointer-events: none; opacity: 0.5;`;
+                    inert.dataset.outOfRange = '1';
+                    container.appendChild(inert);
                     continue;
                 }
                 const cell = document.createElement('div');
