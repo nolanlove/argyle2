@@ -186,10 +186,17 @@ class MusicalGrid {
     // central cells fall inside the visible rectangle.
     createGrid(width, height) {
         const grid = [];
+        // The pitch formula `4x + 3y + origin` is monotonic, so for a 20×20
+        // grid all valid (in-MIDI) cells cluster in the low-x/low-y corner.
+        // When we enlarged to 40×40 to support pinch-zoom, those valid cells
+        // ended up squished to the bottom of the canvas after the -45°
+        // rotation. Shifting the formula's coordinate origin to the array
+        // center keeps valid pitches centered in the grid for any size.
+        const shift = Math.max(0, Math.floor((width - 20) / 2));
         for (let y = 0; y < height; y++) {
             grid[y] = [];
             for (let x = 0; x < width; x++) {
-                const pitch = PitchUtils.getPitchAt(x, y, PitchUtils.getOriginPitch());
+                const pitch = PitchUtils.getPitchAt(x - shift, y - shift, PitchUtils.getOriginPitch());
                 if (!pitch) {
                     grid[y][x] = { pitch: null, active: false, note: null, octave: null };
                     continue;
