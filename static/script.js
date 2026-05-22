@@ -1575,6 +1575,10 @@ class MusicalGrid {
         const closeBtn = document.getElementById('moreSheetClose');
         const backdrop = document.getElementById('moreSheetBackdrop');
         const body = document.getElementById('moreSheetBody');
+        console.log('[more-sheet] setup', {
+            sheet: !!sheet, toggle: !!toggle, closeBtn: !!closeBtn,
+            backdrop: !!backdrop, body: !!body,
+        });
         if (!sheet || !toggle || !closeBtn || !backdrop || !body) return;
 
         const mainEl = document.querySelector('main.main');
@@ -1608,7 +1612,15 @@ class MusicalGrid {
             returnSectionsToMain();
         };
 
-        toggle.addEventListener('click', open);
+        const handleToggleEvent = (e) => {
+            console.log('[more-sheet] toggle activated', e.type);
+            // touchend would otherwise also fire a click — preventDefault on
+            // touchend suppresses that synth so we don't open twice.
+            if (e.type === 'touchend') e.preventDefault();
+            open();
+        };
+        toggle.addEventListener('click', handleToggleEvent);
+        toggle.addEventListener('touchend', handleToggleEvent);
         closeBtn.addEventListener('click', close);
         backdrop.addEventListener('click', close);
         // Esc closes the sheet too — handy if the user is also on a
