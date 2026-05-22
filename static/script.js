@@ -1569,6 +1569,21 @@ class MusicalGrid {
     // hidden until the user taps the More button; this method wires the
     // open/close interactions and reparents the sections into the sheet
     // body so they actually become visible there.
+    // iOS Safari has been inconsistent about 100dvh — depending on version
+    // it sometimes resolves to the full viewport height (including the
+    // URL-bar area). To make the wrapper match the actual visible
+    // viewport reliably, set its height from window.innerHeight in JS
+    // and update on resize.
+    pinWrapperToVisibleViewport() {
+        const wrap = document.querySelector('.grid-wrapper');
+        if (!wrap) return;
+        if (window.innerWidth > 900) {
+            wrap.style.height = '';
+            return;
+        }
+        wrap.style.height = window.innerHeight + 'px';
+    }
+
     setupMoreSheet() {
         const sheet = document.getElementById('more-sheet');
         const toggle = document.getElementById('moreSheetToggle');
@@ -2395,6 +2410,11 @@ class MusicalGrid {
         this.setupMusicalInterface();
         this.bindMusicalEvents();
         this.setupMoreSheet();
+        this.pinWrapperToVisibleViewport();
+        window.addEventListener('resize', () => this.pinWrapperToVisibleViewport());
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', () => this.pinWrapperToVisibleViewport());
+        }
         this.restoreSimplePrefs();
         
         // Set default selections BEFORE creating grid visualization
