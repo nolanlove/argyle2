@@ -32,20 +32,12 @@
     
     <!-- Web App Manifest -->
     <link rel="manifest" href="{% static 'manifest.json' %}">
-    <link rel="stylesheet" href="{% static 'styles.css' %}?v=21">
+    <link rel="stylesheet" href="{% static 'styles.css' %}?v=24">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <!-- Audio initialization overlay -->
-    <div id="audio-overlay" class="audio-overlay">
-        <div class="audio-overlay-content">
-            <h2>♬ Click to Start Audio</h2>
-            <p>Click anywhere to enable audio playback</p>
-        </div>
-    </div>
-
     <!-- AI Chatbot Interface -->
     <div id="chatbot-container" class="chatbot-container">
         <div id="chatbot-toggle" class="chatbot-toggle">
@@ -122,7 +114,9 @@
                     <button class="btn btn-secondary info-play-chord" id="playChordInfo">▶ Play Chord</button>
                     <button class="btn btn-secondary info-toggle-clones" id="toggleClones">Clones</button>
                 </div>
-                <div id="grid-container"></div>
+                <div class="grid-canvas">
+                    <div id="grid-container"></div>
+                </div>
             </div>
         </main>
     </div>
@@ -288,8 +282,8 @@
     </div>
     
     <script src="https://unpkg.com/tone@14.7.77/build/Tone.js"></script>
-    <script type="module" src="{% static 'script.js' %}?v=22"></script>
-    <script type="module" src="{% static 'chatbot.js' %}?v=22"></script>
-    <script src="{% static 'auth-ui.js' %}?v=22"></script>
+    <script type="module" src="{% static 'script.js' %}?v=24"></script>
+    <script type="module" src="{% static 'chatbot.js' %}?v=24"></script>
+    <script src="{% static 'auth-ui.js' %}?v=24"></script>
 </body>
 </html> 

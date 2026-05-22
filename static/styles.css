@@ -27,53 +27,6 @@ body {
     overflow-x: hidden;
 }
 
-/* Audio initialization overlay */
-.audio-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(15, 23, 42, 0.95);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 9999;
-    backdrop-filter: blur(10px);
-}
-
-.audio-overlay-content {
-    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
-    padding: 50px;
-    border-radius: 24px;
-    text-align: center;
-    box-shadow: 
-        0 25px 50px rgba(0, 0, 0, 0.5),
-        0 0 0 1px rgba(59, 130, 246, 0.1),
-        inset 0 1px 0 rgba(255, 255, 255, 0.1);
-    max-width: 450px;
-    margin: 20px;
-    border: 1px solid rgba(59, 130, 246, 0.2);
-}
-
-.audio-overlay-content h2 {
-    font-size: 2rem;
-    font-weight: 600;
-    margin-bottom: 20px;
-    color: #f8fafc;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-}
-
-.audio-overlay-content p {
-    font-size: 1.1rem;
-    color: #cbd5e1;
-    margin-bottom: 0;
-}
-
-.audio-overlay.hidden {
-    display: none;
-}
-
 .container {
     max-width: 1200px;
     margin: 0 auto;
@@ -639,8 +592,10 @@ body {
 
 /* Grid styles */
 .grid-wrapper {
-    width: 734px;
-    height: 734px;
+    /* Sized for the rectangle-grid layout: 720x500 visible cells + ~70px
+       cell-overflow on each side + ~150px button column on each side. */
+    width: 1100px;
+    height: 600px;
     margin: 30px auto;
     display: flex;
     align-items: center;
@@ -652,8 +607,8 @@ body {
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 734px;
-    height: 734px;
+    width: 1100px;
+    height: 600px;
     background: transparent;
     transform: translate(-50%, -50%);
     z-index: 3;
@@ -969,16 +924,14 @@ body {
 #grid-container {
     display: grid;
     gap: 2px;
-    background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%) !important;
-    padding: 15px;
-    background-color: #2d3748;
-    border-radius: 16px;
-    width: 500px;
-    height: 500px;
-    box-shadow: 
-        0 20px 60px rgba(0, 0, 0, 0.4),
-        0 0 0 1px rgba(59, 130, 246, 0.2),
-        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    /* Background, padding, border-radius and box-shadow used to draw the
+       rotated diamond plate behind the cells; the rectangle-grid layout
+       defines its frame purely by which cells render, so these are off. */
+    background: transparent !important;
+    background-color: transparent;
+    padding: 0;
+    border-radius: 0;
+    box-shadow: none;
     transform: rotate(-45deg);
     transform-origin: center;
     justify-content: center;
@@ -1027,125 +980,202 @@ body {
         inset 0 0 0 1px rgba(107, 114, 128, 0.3) !important;
 }
 
-/* Responsive design */
-@media (max-width: 768px) {
-    .title {
-        font-size: 2.5rem;
+/* Grid canvas — a positioning context wrapper around #grid-container.
+   On desktop it is transparent and full-bleed inside .grid-wrapper, so the
+   grid keeps its original centered-absolute layout. On phones it becomes the
+   sized box that the scaled grid is centered in (see mobile media query). */
+.grid-canvas {
+    display: contents;
+}
+
+/* Responsive design — phone + small tablet.
+   The argyle grid is the UI on small screens: it fills the entire
+   viewport and the eight info-* buttons sit as semi-transparent
+   overlays at the four viewport corners. The header is hidden (the app
+   is recognizable from its diamond pattern); the chatbot/auth chrome
+   already lives at the top corners via position:fixed. JS sizes the
+   grid via the matching updateGridDimensionsForViewport() so the
+   visible cells fill the viewport rather than being scaled down.
+
+   Breakpoint at 900px so iPad portrait (768/820px) gets this layout —
+   the desktop layout's 1100px grid wrapper would overflow on iPad. */
+@media (max-width: 900px) {
+    html, body {
+        overflow: hidden;
+        height: 100%;
+        height: 100dvh;
     }
-    
-    .musical-section {
-        padding: 40px 25px;
+
+    .container {
+        padding: 0;
+        max-width: 100%;
     }
-    
-    .musical-content h2 {
-        font-size: 2rem;
+
+    .header {
+        display: none;
     }
-    
-    .musical-patterns, .musical-info {
-        flex-direction: column;
-        align-items: center;
+
+    .main {
+        padding: 0;
     }
-    
-    .btn {
-        width: 100%;
-        max-width: 220px;
+
+    /* Full-viewport wrapper. The grid canvas fills it; the buttons overlay
+       at the corners with position:absolute. JS dynamically injects a
+       large `.musical-section` (Chords/Sequencer panels) as a sibling in
+       `.main` — that content is for the legacy desktop layout. On mobile we
+       want the grid to BE the screen, so we (a) hide the section and (b)
+       give the wrapper an explicit z-index so anything that might leak
+       through stays underneath. */
+    .musical-section,
+    .grid-controls {
+        display: none !important;
     }
-    
+
     .grid-wrapper {
-        width: 600px;
-        height: 600px;
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        height: 100dvh;
+        margin: 0;
+        display: block;
+        z-index: 10;
     }
-    
+
+    #info-background {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        transform: none;
+        pointer-events: none;
+        z-index: 5;
+    }
+
+    .grid-canvas {
+        display: block;
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        z-index: 1;
+    }
+
+    /* Cancel the desktop !important scale; JS controls grid size via
+       cellSize + visibleRectW/H now, so the inline rotate(-45deg) stays
+       and we don't need scale(). */
     #grid-container {
-        width: 400px;
-        height: 400px;
+        transform: rotate(-45deg) !important;
     }
-    
-    .sequencer-controls {
-        flex-wrap: wrap;
-        gap: 10px;
-    }
-    
-    .speed-control {
-        order: 3;
-        width: 100%;
-        margin-top: 10px;
-    }
-    
-    .speed-slider {
-        width: 100px;
-    }
-    
-    /* Adjust sequence controls for mobile */
-    .sequence-controls {
-        gap: 8px;
-    }
-    
-    .sequence-controls .btn {
-        flex: 1;
-        min-width: 90px;
-        max-width: none;
-        font-size: 0.85rem;
+
+    /* The eight info-* buttons become overlays at the four viewport
+       corners. Each has its own absolute placement; the shared block
+       below resets sizing/typography for touch. */
+    .info-key,
+    .info-play-key,
+    .info-grid-labels,
+    .info-play-mode,
+    .info-chord,
+    .info-clear,
+    .info-play-chord,
+    .info-toggle-clones {
+        position: absolute !important;
+        min-width: 0;
+        height: 36px;
         padding: 8px 12px;
+        font-size: 11px;
+        line-height: 1.2;
+        pointer-events: auto;
+        backdrop-filter: blur(12px);
+        white-space: nowrap;
+        max-width: 45vw;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
-    
-    /* Adjust histograms for mobile */
-    .variance-histogram {
-        height: 150px;
-        gap: 0.5px;
+
+    /* Reserve a top safe-area for chatbot toggle (left) and auth icon
+       (right). They're position:fixed at top:12px and ~40px tall, so
+       overlay buttons start at ~64px from the top. */
+    .info-key {
+        top: 64px !important;
+        left: 12px !important;
+        right: auto !important;
+        bottom: auto !important;
     }
-    
-    .stacks-display {
-        flex-direction: column;
-        gap: 15px;
+    .info-chord {
+        top: 64px !important;
+        right: 12px !important;
+        left: auto !important;
+        bottom: auto !important;
+        text-align: right;
+        justify-content: flex-end;
     }
-    
-    .stack-section {
-        width: 100%;
+    .info-play-key {
+        top: 108px !important;
+        left: 12px !important;
+        right: auto !important;
+        bottom: auto !important;
+    }
+    .info-play-chord {
+        top: 108px !important;
+        right: 12px !important;
+        left: auto !important;
+        bottom: auto !important;
+    }
+    .info-grid-labels {
+        bottom: 60px !important;
+        left: 12px !important;
+        top: auto !important;
+        right: auto !important;
+    }
+    .info-play-mode {
+        bottom: 60px !important;
+        right: 12px !important;
+        top: auto !important;
+        left: auto !important;
+    }
+    .info-toggle-clones {
+        bottom: 16px !important;
+        left: 12px !important;
+        top: auto !important;
+        right: auto !important;
+    }
+    .info-clear {
+        bottom: 16px !important;
+        right: 12px !important;
+        top: auto !important;
+        left: auto !important;
     }
 }
 
-@media (max-width: 480px) {
-    .container {
-        padding: 0 15px;
+/* Phone — small width. Tighter overlay buttons. */
+@media (max-width: 420px) {
+    .info-key,
+    .info-play-key,
+    .info-grid-labels,
+    .info-play-mode,
+    .info-chord,
+    .info-clear,
+    .info-play-chord,
+    .info-toggle-clones {
+        font-size: 10.5px;
+        padding: 6px 10px;
+        height: 32px;
+        max-width: 44vw;
     }
-    
-    .title {
-        font-size: 2rem;
+
+    .info-play-key {
+        top: 102px !important;
     }
-    
-    .musical-content h2 {
-        font-size: 1.5rem;
+    .info-play-chord {
+        top: 102px !important;
     }
-    
-    .grid-wrapper {
-        width: 400px;
-        height: 400px;
+    .info-grid-labels {
+        bottom: 54px !important;
     }
-    
-    #grid-container {
-        width: 300px;
-        height: 300px;
-    }
-    
-    /* Further adjust histograms for small mobile */
-    .variance-histogram {
-        height: 120px;
-        gap: 0.25px;
-    }
-    
-    .histogram-row {
-        font-size: 0.75rem;
-        gap: 6px;
-    }
-    
-    .histogram-label {
-        min-width: 50px;
-    }
-    
-    .histogram-notes {
-        max-width: 80px;
-        font-size: 0.7rem;
+    .info-play-mode {
+        bottom: 54px !important;
     }
 } 
 
@@ -1776,16 +1806,36 @@ body {
 /* Responsive design for chatbot */
 @media (max-width: 768px) {
     .chatbot-container {
-        top: 10px;
-        right: 10px;
+        top: 12px;
+        left: 12px;
     }
-    
+
+    /* Collapse the toggle to a round icon so it doesn't crowd the title. */
+    .chatbot-toggle {
+        padding: 0;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        justify-content: center;
+        gap: 0;
+    }
+
+    .chatbot-label {
+        display: none;
+    }
+
+    .chatbot-icon {
+        font-size: 1.1rem;
+    }
+
     .chatbot-panel {
-        width: 320px;
-        height: 450px;
+        width: min(360px, calc(100vw - 24px));
+        height: 70vh;
+        max-height: 520px;
         top: 50px;
+        left: 0;
     }
-    
+
     .message-content {
         max-width: 220px;
     }
@@ -1793,12 +1843,12 @@ body {
 
 @media (max-width: 480px) {
     .chatbot-panel {
-        width: calc(100vw - 20px);
-        right: -10px;
+        width: calc(100vw - 24px);
+        left: 0;
     }
-    
+
     .message-content {
-        max-width: 180px;
+        max-width: calc(100vw - 96px);
     }
 }
 
@@ -1809,6 +1859,128 @@ body {
   right: 20px;
   z-index: 1000;
   max-width: 300px;
+}
+
+/* Round person icon trigger (logged-out state). */
+.auth-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 999px;
+  background: rgba(30, 41, 59, 0.85);
+  color: #f1f5f9;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.auth-icon-btn:hover {
+  background: rgba(51, 65, 85, 0.95);
+  border-color: rgba(148, 163, 184, 0.5);
+  transform: translateY(-1px);
+}
+
+.auth-icon-btn svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* Centered modal */
+.auth-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.65);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 16px;
+}
+
+.auth-modal-backdrop[hidden] { display: none; }
+
+body.auth-modal-open { overflow: hidden; }
+
+.auth-modal {
+  position: relative;
+  width: 100%;
+  max-width: 380px;
+  background: rgba(15, 23, 42, 0.98);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  padding: 28px 24px 24px;
+}
+
+.auth-popover-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  background: transparent;
+  border: 0;
+  color: #94a3b8;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.auth-popover-close:hover { color: #f1f5f9; }
+
+/* Tabs */
+.auth-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  background: rgba(30, 41, 59, 0.6);
+  border-radius: 10px;
+  padding: 4px;
+}
+
+.auth-tab {
+  flex: 1;
+  background: transparent;
+  border: 0;
+  color: #94a3b8;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+}
+
+.auth-tab:hover { color: #f1f5f9; }
+
+.auth-tab.is-active {
+  background: rgba(96, 165, 250, 0.15);
+  color: #f1f5f9;
+}
+
+.auth-pane[hidden] { display: none; }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0);
+  white-space: nowrap; border: 0;
+}
+
+/* Inside the modal, the form shouldn't render as its own nested card. */
+.auth-modal .auth-email-form {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .auth-login {
@@ -2230,6 +2402,49 @@ body {
 .modal-actions .btn-secondary:hover {
     background: linear-gradient(135deg, #64748b 0%, #475569 100%);
     border-color: rgba(59, 130, 246, 0.5);
+}
+
+/* Modal responsive — Key/Chord/Sequence modals need to wrap on phones. */
+@media (max-width: 560px) {
+    .modal-content {
+        width: calc(100vw - 24px);
+        max-width: none;
+        margin: 0 12px;
+        border-radius: 14px;
+    }
+
+    .modal-header {
+        padding: 16px 18px;
+    }
+
+    .modal-header h3 {
+        font-size: 1rem;
+    }
+
+    .modal-body {
+        padding: 18px;
+    }
+
+    .key-selector-controls,
+    .chord-selector-controls {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .key-selector-controls .chord-select,
+    .chord-selector-controls .chord-select {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .modal-actions {
+        flex-direction: column-reverse;
+        gap: 8px;
+    }
+
+    .modal-actions .btn {
+        width: 100%;
+    }
 }
 
 

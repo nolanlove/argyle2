@@ -8,8 +8,33 @@ import { NoteDetectionUI } from './note-detection-ui.js';
 
 class MusicalGrid {
     constructor() {
-        this.gridSize = 8; // Default grid size
-        this.grid = this.createGrid(this.gridSize, this.gridSize);
+        // Rectangle-grid branch. The grid is still rotated -45° (so each
+        // cell is a diamond, preserving the argyle look), but we render
+        // only the cells whose diamond actually overlaps an axis-aligned
+        // target rectangle. The underlying logical grid is much bigger
+        // than what's drawn — it must extend far enough that the cells at
+        // the rectangle's corners exist to be tested.
+        this.gridWidth = 20;
+        this.gridHeight = 20;
+        this.gridSize = this.gridWidth; // legacy
+        this.grid = this.createGrid(this.gridWidth, this.gridHeight);
+        // Visible rectangle (in pixels, axis-aligned in screen space) and
+        // cell size. Desktop defaults are the original tuned values; on
+        // narrow viewports the grid expands to fill the screen — see
+        // updateGridDimensionsForViewport().
+        this.cellSize = 50;
+        this.visibleRectW = 720;
+        this.visibleRectH = 500;
+        this.updateGridDimensionsForViewport();
+        // Re-render when the viewport crosses a breakpoint or rotates.
+        window.addEventListener('resize', () => {
+            const prev = `${this.cellSize}:${this.visibleRectW}:${this.visibleRectH}`;
+            this.updateGridDimensionsForViewport();
+            const next = `${this.cellSize}:${this.visibleRectW}:${this.visibleRectH}`;
+            if (prev !== next) {
+                this.createGridVisualization();
+            }
+        });
         // Use PitchUtils for all pitch-related functions instead of duplicating logic
         this.noteToPitchClass = PitchUtils.noteToPitchClass;
         this.pitchClassToNote = PitchUtils.pitchClassToNote;
@@ -138,19 +163,26 @@ class MusicalGrid {
         return displayNames[mode] || mode;
     }
 
-    // Create a 2D array grid with absolute pitch values
+    // Create a 2D array grid with absolute pitch values.
+    // Cells whose calculated pitch falls outside MIDI 0-127 get null fields
+    // and are skipped at render time. This is fine for the rectangle-grid
+    // layout, which uses an oversized 20×20 underlying grid — only the
+    // central cells fall inside the visible rectangle.
     createGrid(width, height) {
         const grid = [];
         for (let y = 0; y < height; y++) {
             grid[y] = [];
             for (let x = 0; x < width; x++) {
-                // Calculate the absolute pitch for this cell
                 const pitch = PitchUtils.getPitchAt(x, y, PitchUtils.getOriginPitch());
+                if (!pitch) {
+                    grid[y][x] = { pitch: null, active: false, note: null, octave: null };
+                    continue;
+                }
                 grid[y][x] = {
-                    pitch: pitch.pitch, // Store absolute pitch value (0-127)
-                    active: false,      // Whether this cell is active/selected
-                    note: pitch.note,   // Note name for display
-                    octave: pitch.octave // Octave for display
+                    pitch: pitch.pitch,
+                    active: false,
+                    note: pitch.note,
+                    octave: pitch.octave,
                 };
             }
         }
@@ -1289,16 +1321,45 @@ class MusicalGrid {
     }
 
     // Create a visual representation of the grid on the page
+    // Pick cell size and visible-rect dimensions based on the viewport.
+    // On desktop we keep the original 50px cell / 720×500 rect that the
+    // existing layout was tuned for. On narrow viewports the rect expands
+    // to fill the screen and cellSize is chosen so a comfortable number of
+    // diamonds fit across the width — Nolan asked for the grid itself to
+    // be the mobile UI, not a shrunken card.
+    updateGridDimensionsForViewport() {
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        // Match the @media (max-width: 900px) breakpoint in styles.css —
+        // iPad portrait (768/820px) gets the full-viewport layout because
+        // the desktop layout's 1100px grid wrapper would overflow it.
+        const isMobile = vw <= 900;
+        if (isMobile) {
+            // Diamond diagonal = cellSize * √2. Pick target diamonds-across
+            // based on viewport width so phones get big diamonds (~4-5 across)
+            // and tablets get more density (~7).
+            const targetAcross = vw < 380 ? 4 : vw < 600 ? 5 : 7;
+            const computed = Math.round(vw / targetAcross / Math.SQRT2);
+            this.cellSize = Math.max(44, Math.min(110, computed));
+            this.visibleRectW = vw;
+            this.visibleRectH = vh;
+        } else {
+            this.cellSize = 50;
+            this.visibleRectW = 720;
+            this.visibleRectH = 500;
+        }
+    }
+
     createGridVisualization(containerId = 'grid-container') {
         const container = document.getElementById(containerId);
         if (!container) {
             console.error(`Container ${containerId} not found`);
             return;
         }
-        
+
         // Clear the container
         container.innerHTML = '';
-        
+
         // Ensure key notes are properly set in the grid
         this.keyNotes.forEach(note => {
             const coords = this.getCoordinatesForNote(note);
@@ -1307,22 +1368,30 @@ class MusicalGrid {
                 this.setGridValue(coords[0].x, coords[0].y, 1);
             }
         });
-        
+
         const dims = this.getGridDimensions();
-        const cellSize = Math.min(500 / dims.width, 500 / dims.height) - 1;
-        
-        // Set grid template
+        // Cell size and visible rect come from updateGridDimensionsForViewport()
+        // so the grid adapts when the window resizes. The 20×20 underlying
+        // grid is big enough that even with cellSize≈110 the rotated bbox
+        // (√2 · 20 · 110 ≈ 3110px) still contains the visible rectangle.
+        const cellSize = this.cellSize;
+        const rectW = this.visibleRectW || 720;
+        const rectH = this.visibleRectH || 500;
+
+        // Set grid template — rotated -45° so each cell renders as a diamond.
+        // The grid background/border are transparent here; the visible
+        // rectangle is defined purely by which cells get rendered.
         container.style.cssText = `
             display: grid;
             grid-template-columns: repeat(${dims.width}, ${cellSize}px);
             grid-template-rows: repeat(${dims.height}, ${cellSize}px);
             gap: 1px;
-            background: #333;
-            padding: 10px;
-            border-radius: 8px;
-            width: ${dims.width * cellSize + (dims.width - 1) + 20}px;
-            height: ${dims.height * cellSize + (dims.height - 1) + 20}px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            background: transparent;
+            padding: 0;
+            border-radius: 0;
+            box-shadow: none;
+            width: ${dims.width * cellSize + (dims.width - 1)}px;
+            height: ${dims.height * cellSize + (dims.height - 1)}px;
             transform: rotate(-45deg);
             transform-origin: center;
             justify-content: center;
@@ -1335,10 +1404,53 @@ class MusicalGrid {
             translate: -50% -50%;
         `;
 
+        // Visibility filter. After the -45° rotation around the grid center,
+        // a cell at grid position (gx, gy) has its center at:
+        //   rx = (√2/2) * cellSize * (a + b)
+        //   ry = (√2/2) * cellSize * (b - a)
+        // where a = gx + 0.5 - dims.width/2, b = gy + 0.5 - dims.height/2.
+        //
+        // The rotated cell is a diamond with half-diagonal = cellSize/√2
+        // along each screen axis (so its axis-aligned bounding box is
+        // 2·halfDiag wide and 2·halfDiag tall). We render any cell whose
+        // bbox overlaps the target rectangle — i.e. dx and dy each
+        // independently within halfDiag. This fills corners (where both
+        // dx and dy are simultaneously nonzero) that an L1-sum test would
+        // exclude.
+        const SQRT_HALF = Math.SQRT1_2;
+        const halfDiag = cellSize * SQRT_HALF;
+        const cgx = dims.width / 2;
+        const cgy = dims.height / 2;
+        const isCellVisible = (gx, gy) => {
+            const a = gx + 0.5 - cgx;
+            const b = gy + 0.5 - cgy;
+            const rx = SQRT_HALF * cellSize * (a + b);
+            const ry = SQRT_HALF * cellSize * (b - a);
+            const dx = Math.max(0, Math.abs(rx) - rectW / 2);
+            const dy = Math.max(0, Math.abs(ry) - rectH / 2);
+            return dx < halfDiag && dy < halfDiag;
+        };
+        this._cellVisibility = isCellVisible;
+
         // Render from bottom to top (y=49 to y=0) so origin is at bottom left
         for (let displayY = 0; displayY < dims.height; displayY++) {
             const actualY = dims.height - 1 - displayY; // Flip Y coordinate for display
             for (let x = 0; x < dims.width; x++) {
+                // Skip cells whose rotated centers fall outside the visible
+                // rectangle. We still emit a placeholder so the CSS Grid
+                // layout slot stays at the right position; visibility:hidden
+                // means it doesn't paint and doesn't intercept clicks.
+                // Skip if this cell's diamond doesn't overlap the visible
+                // rectangle, or if its underlying pitch is out of MIDI range
+                // (which can happen for grid coordinates far from the origin).
+                const cellData = this.grid[actualY] && this.grid[actualY][x];
+                if (!isCellVisible(x, displayY) || !cellData || cellData.pitch == null) {
+                    const placeholder = document.createElement('div');
+                    placeholder.style.visibility = 'hidden';
+                    placeholder.dataset.outsideRect = '1';
+                    container.appendChild(placeholder);
+                    continue;
+                }
                 const cell = document.createElement('div');
                 // Use the actualY coordinate (0 at bottom in note system) for note calculation
                 const note = this.getNoteAt(x, actualY);
@@ -1845,8 +1957,10 @@ class MusicalGrid {
         // Initialize pitch variance display
         this.updatePitchVarianceDisplay();
         
-        // Show audio initialization overlay
-        this.showAudioOverlay();
+        // Initialize audio on the first user gesture anywhere on the page.
+        // Browsers block AudioContext until a gesture; the grid click the user
+        // already makes counts, so no separate "click to enable audio" UI is needed.
+        this.installFirstGestureAudioInit();
         
         // Show keyboard navigation hint after a short delay
         setTimeout(() => {
@@ -1865,67 +1979,33 @@ class MusicalGrid {
         });
     }
 
-    // Show audio initialization overlay
-    showAudioOverlay() {
-        const overlay = document.getElementById('audio-overlay');
-        if (overlay) {
-            // Prevent multiple event listener additions
-            if (this._audioOverlayInitialized) {
-                console.log('Audio overlay already initialized, skipping');
-                overlay.style.display = 'flex';
-                return;
-            }
-            
-            console.log('Showing audio overlay');
-            overlay.style.display = 'flex';
-            this._audioOverlayInitialized = true;
-            
-            // Simple click handler for the entire overlay
-            const handleClick = async (event) => {
-                // Check if the click is on a button that has its own handler
-                if (event.target.tagName === 'BUTTON' || event.target.closest('button')) {
+    // Install a one-shot listener that boots the audio context on the first
+    // real user gesture (pointerdown / keydown / touchstart). The listener
+    // runs in the *capture* phase and doesn't preventDefault, so the original
+    // click on the grid still does its normal job — the user perceives no
+    // separate "click to enable audio" step.
+    installFirstGestureAudioInit() {
+        if (this._firstGestureInitialized) return;
+        this._firstGestureInitialized = true;
 
-                    return; // Let the button's own handler deal with it
-                }
-                
-                const startTime = performance.now();
+        const handler = async (event) => {
+            // Tear down before we await so we never fire twice.
+            document.removeEventListener('pointerdown', handler, true);
+            document.removeEventListener('keydown', handler, true);
+            document.removeEventListener('touchstart', handler, true);
 
-                event.preventDefault();
-                event.stopPropagation();
-                
-                // Initialize audio immediately
-                const initStartTime = performance.now();
+            this.hasUserInteracted = true;
+            this.forceAudioInit = true;
+            try {
                 await this.initAudio();
+            } catch (err) {
+                console.warn('Audio init on first gesture failed:', err);
+            }
+        };
 
-                
-                this.hasUserInteracted = true;
-                this.forceAudioInit = true;
-                
-                // Hide overlay
-                overlay.style.display = 'none';
-                
-                // Remove all event listeners
-                overlay.removeEventListener('click', handleClick);
-                document.removeEventListener('click', handleClick);
-                document.removeEventListener('keydown', handleClick);
-                document.removeEventListener('touchstart', handleClick);
-                
-
-                
-                // Show success message
-                // // this.showNotification('Audio initialized! You can now play notes and chords.', 'success');
-            };
-            
-            // Add click listener to the overlay itself
-            overlay.addEventListener('click', handleClick);
-            
-            // Also add to document for any click anywhere
-            document.addEventListener('click', handleClick);
-            document.addEventListener('keydown', handleClick);
-            document.addEventListener('touchstart', handleClick);
-        } else {
-            console.error('Audio overlay not found');
-        }
+        document.addEventListener('pointerdown', handler, true);
+        document.addEventListener('keydown', handler, true);
+        document.addEventListener('touchstart', handler, true);
     }
 
     // Set default selections
