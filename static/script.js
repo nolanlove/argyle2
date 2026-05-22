@@ -1355,10 +1355,30 @@ class MusicalGrid {
     // One-finger touches pass through untouched so taps still play notes.
     // Idempotent — safe to call after each createGridVisualization (we mark
     // the canvas with a dataset flag and skip if it's already wired).
+    // Listeners are attached to the .grid-wrapper (not the canvas) so they
+    // catch touches that land on the cell tapTarget overlays — those
+    // overlays have pointer-events:auto for click handling, so touch events
+    // start there and bubble up through grid-container to the wrapper.
     setupGridGestures() {
-        const canvas = document.querySelector('.grid-canvas');
-        if (!canvas || canvas.dataset.gesturesWired === '1') return;
-        canvas.dataset.gesturesWired = '1';
+        const wrapper = document.querySelector('.grid-wrapper');
+        if (!wrapper || wrapper.dataset.gesturesWired === '1') return;
+        wrapper.dataset.gesturesWired = '1';
+
+        // Live debug overlay — visible on mobile, off on desktop. Lets us
+        // see whether touch events fire at all, what `touches.length` is,
+        // and the current pan/zoom state. Toggle by removing this block.
+        let dbg = null;
+        if (window.innerWidth <= 900) {
+            dbg = document.createElement('div');
+            dbg.id = 'gesture-debug';
+            dbg.style.cssText =
+                'position:fixed;left:8px;bottom:calc(env(safe-area-inset-bottom,0px) + 90px);' +
+                'z-index:9999;background:rgba(0,0,0,0.75);color:#0f0;font:11px/1.2 ui-monospace,monospace;' +
+                'padding:4px 6px;border-radius:6px;pointer-events:none;white-space:pre;';
+            dbg.textContent = 'gesture: idle';
+            document.body.appendChild(dbg);
+        }
+        const setDbg = (s) => { if (dbg) dbg.textContent = s; };
 
         let initialDist = null;
         let initialZoom = null;
@@ -1372,12 +1392,14 @@ class MusicalGrid {
         });
 
         const onStart = (e) => {
+            setDbg(`start: touches=${e.touches.length}`);
             if (e.touches.length === 2) {
                 e.preventDefault();
                 initialDist = dist(e.touches[0], e.touches[1]);
                 initialZoom = this.gridZoom;
                 initialCentroid = centroid(e.touches[0], e.touches[1]);
                 initialPan = { x: this.gridPanX, y: this.gridPanY };
+                setDbg(`PINCH start  d=${initialDist.toFixed(0)}  z=${this.gridZoom.toFixed(2)}`);
             }
         };
 
@@ -1394,19 +1416,21 @@ class MusicalGrid {
                 this.gridPanX = initialPan.x + (c.x - initialCentroid.x);
                 this.gridPanY = initialPan.y + (c.y - initialCentroid.y);
                 this.applyGridTransform();
+                setDbg(`MOVE z=${this.gridZoom.toFixed(2)} pan=${this.gridPanX.toFixed(0)},${this.gridPanY.toFixed(0)}`);
             }
         };
 
         const onEnd = (e) => {
             if (e.touches.length < 2) {
                 initialDist = null;
+                setDbg(`end: touches=${e.touches.length} z=${this.gridZoom.toFixed(2)}`);
             }
         };
 
-        canvas.addEventListener('touchstart', onStart, { passive: false });
-        canvas.addEventListener('touchmove', onMove, { passive: false });
-        canvas.addEventListener('touchend', onEnd);
-        canvas.addEventListener('touchcancel', onEnd);
+        wrapper.addEventListener('touchstart', onStart, { passive: false });
+        wrapper.addEventListener('touchmove', onMove, { passive: false });
+        wrapper.addEventListener('touchend', onEnd);
+        wrapper.addEventListener('touchcancel', onEnd);
     }
 
     updateGridDimensionsForViewport() {

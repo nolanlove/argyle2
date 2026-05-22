@@ -1200,6 +1200,16 @@ body {
         touch-action: none;
     }
 
+    /* `touch-action` does NOT inherit. iOS Safari evaluates it on the
+       element that actually receives the touch (the cell tapTarget
+       overlays), so it has to be set on every descendant too — otherwise
+       the browser handles its own pinch-zoom on top of ours. */
+    .grid-canvas *,
+    #grid-container,
+    #grid-container * {
+        touch-action: none;
+    }
+
     /* JS still writes the rotate(-45deg) inline; CSS doesn't need to add
        scale() because cellSize is computed from the canvas size now. */
     #grid-container {
