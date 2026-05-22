@@ -14,15 +14,8 @@ class MusicalGrid {
         // target rectangle. The underlying logical grid is much bigger
         // than what's drawn — it must extend far enough that the cells at
         // the rectangle's corners exist to be tested.
-        // Underlying grid is 40×40 so that even at minimum zoom (0.4×) the
-        // rotated diamond bbox still covers the full mobile canvas — at
-        // 20×20 the diamond was smaller than the viewport when zoomed out
-        // and the canvas revealed the rotated shape instead of a clean
-        // rectangle. Cells outside the visibility rect (and any with pitch
-        // out of MIDI range) render as visibility:hidden, so the extra
-        // cells cost essentially nothing.
-        this.gridWidth = 40;
-        this.gridHeight = 40;
+        this.gridWidth = 20;
+        this.gridHeight = 20;
         this.gridSize = this.gridWidth; // legacy
         this.grid = this.createGrid(this.gridWidth, this.gridHeight);
         // Visible rectangle (in pixels, axis-aligned in screen space) and
@@ -186,17 +179,10 @@ class MusicalGrid {
     // central cells fall inside the visible rectangle.
     createGrid(width, height) {
         const grid = [];
-        // The pitch formula `4x + 3y + origin` is monotonic, so for a 20×20
-        // grid all valid (in-MIDI) cells cluster in the low-x/low-y corner.
-        // When we enlarged to 40×40 to support pinch-zoom, those valid cells
-        // ended up squished to the bottom of the canvas after the -45°
-        // rotation. Shifting the formula's coordinate origin to the array
-        // center keeps valid pitches centered in the grid for any size.
-        const shift = Math.max(0, Math.floor((width - 20) / 2));
         for (let y = 0; y < height; y++) {
             grid[y] = [];
             for (let x = 0; x < width; x++) {
-                const pitch = PitchUtils.getPitchAt(x - shift, y - shift, PitchUtils.getOriginPitch());
+                const pitch = PitchUtils.getPitchAt(x, y, PitchUtils.getOriginPitch());
                 if (!pitch) {
                     grid[y][x] = { pitch: null, active: false, note: null, octave: null };
                     continue;
@@ -1448,17 +1434,28 @@ class MusicalGrid {
             const targetAcross = w < 380 ? 4 : w < 600 ? 5 : 7;
             const computed = Math.round(w / targetAcross / Math.SQRT2);
             this.cellSize = Math.max(44, Math.min(110, computed));
-            // Visible rect: scale up by 1/minZoom so that even at the most
-            // zoomed-out level the rect still projects to ≥ canvas size in
-            // screen space — keeps the rendered area visually rectangular
-            // instead of revealing the underlying diamond bounding box.
-            const slack = 1 / (this.minGridZoom || 0.4);
+            // Clamp the zoom-out floor so the rotated diamond bbox of the
+            // 20×20 grid always covers the canvas rectangle — otherwise
+            // pinching all the way out reveals the diamond shape behind it.
+            // canvas-corner reach = |W/2| + |H/2| (L1 distance to corner).
+            // diamond half-diagonal at zoom z = (gridSize · cellSize / √2) · z.
+            // Solve for the z where the second is ≥ the first.
+            const diamondHalfDiag = this.gridSize * this.cellSize / Math.SQRT2;
+            const canvasReach = (w + h) / 2;
+            const minZoomFloor = canvasReach / diamondHalfDiag;
+            this.minGridZoom = Math.max(0.4, Math.min(0.95, minZoomFloor + 0.02));
+            // Visible rect: scale up by 1/minZoom so cells already in the DOM
+            // when the user starts zooming out.
+            const slack = 1 / this.minGridZoom;
             this.visibleRectW = Math.round(w * slack);
             this.visibleRectH = Math.round(h * slack);
+            // If we just dropped below the current zoom, snap back into range.
+            if (this.gridZoom < this.minGridZoom) this.gridZoom = this.minGridZoom;
         } else {
             this.cellSize = 50;
             this.visibleRectW = 720;
             this.visibleRectH = 500;
+            this.minGridZoom = 0.4;
         }
     }
 
@@ -1561,26 +1558,11 @@ class MusicalGrid {
                 // rectangle, or if its underlying pitch is out of MIDI range
                 // (which can happen for grid coordinates far from the origin).
                 const cellData = this.grid[actualY] && this.grid[actualY][x];
-                if (!isCellVisible(x, displayY)) {
-                    // Truly outside the visible region — render an invisible
-                    // placeholder so the CSS Grid layout slot stays correct.
+                if (!isCellVisible(x, displayY) || !cellData || cellData.pitch == null) {
                     const placeholder = document.createElement('div');
                     placeholder.style.visibility = 'hidden';
                     placeholder.dataset.outsideRect = '1';
                     container.appendChild(placeholder);
-                    continue;
-                }
-                if (!cellData || cellData.pitch == null) {
-                    // Inside the visible rect but the underlying pitch is out
-                    // of MIDI range. Render an inert tile so the grid looks
-                    // rectangular at low zoom — no label, no click target.
-                    const inert = document.createElement('div');
-                    inert.style.cssText =
-                        `width: ${cellSize}px; height: ${cellSize}px;` +
-                        `background: #e5e7eb; border-radius: 1px;` +
-                        `pointer-events: none; opacity: 0.5;`;
-                    inert.dataset.outOfRange = '1';
-                    container.appendChild(inert);
                     continue;
                 }
                 const cell = document.createElement('div');
