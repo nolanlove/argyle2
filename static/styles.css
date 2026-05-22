@@ -1579,15 +1579,16 @@ body {
     .info-grid-labels  { grid-column: 2; grid-row: 3; }
     .info-clear        { grid-column: 3; grid-row: 3; }
 
-    /* The play-mode button's text is just the current mode name
-       (e.g. "Tap Chords"), which looks like a static label rather than
-       a toggle. Prefix with "Mode: " on mobile so the meaning is
-       obvious without rewriting the JS that swaps the text. */
-    .info-play-mode::before {
-        content: 'Mode: ';
-        font-weight: 500;
-        opacity: 0.72;
+    /* While the More sheet is open, hide the top-corner chatbot + auth
+       icons. They sit at z:1000 — below the backdrop (z:1500) but the
+       backdrop blur still leaves a distracting silhouette. Cleaner to
+       hide them entirely. */
+    body.more-sheet-open .chatbot-container,
+    body.more-sheet-open .auth-container,
+    body.more-sheet-open .auth-user-info {
+        visibility: hidden;
     }
+
     /* "Clones" moves into the More sheet on mobile — its 4th-column slot
        is taken by the More button which exposes the full set of sections. */
     .info-toggle-clones { display: none !important; }
