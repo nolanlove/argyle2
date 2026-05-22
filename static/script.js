@@ -1541,6 +1541,48 @@ class MusicalGrid {
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && !sheet.hidden) close();
         });
+
+        // Pull-down-to-close gesture on the sheet panel. Mirrors the
+        // iOS native bottom-sheet behavior. We only intercept when the
+        // panel's scroll-position is at the top so the user can still
+        // scroll long content without accidentally dismissing the sheet.
+        const panel = sheet.querySelector('.more-sheet-panel');
+        if (panel) {
+            let dragStartY = null;
+            let dragging = false;
+            panel.addEventListener('touchstart', (e) => {
+                if (panel.scrollTop > 0) return;
+                if (e.touches.length !== 1) return;
+                dragStartY = e.touches[0].clientY;
+                dragging = false;
+            }, { passive: true });
+            panel.addEventListener('touchmove', (e) => {
+                if (dragStartY === null) return;
+                const delta = e.touches[0].clientY - dragStartY;
+                if (delta < 0) return;
+                // First downward movement past 6px commits to drag mode.
+                if (!dragging && delta > 6) {
+                    dragging = true;
+                    panel.style.transition = 'none';
+                }
+                if (dragging) {
+                    panel.style.transform = `translateY(${delta}px)`;
+                    e.preventDefault();
+                }
+            }, { passive: false });
+            const endDrag = (e) => {
+                if (dragStartY === null) return;
+                const t = e.changedTouches && e.changedTouches[0];
+                const delta = t ? (t.clientY - dragStartY) : 0;
+                panel.style.transition = '';
+                panel.style.transform = '';
+                if (dragging && delta > 110) close();
+                dragStartY = null;
+                dragging = false;
+            };
+            panel.addEventListener('touchend', endDrag);
+            panel.addEventListener('touchcancel', endDrag);
+        }
     }
 
     updateGridDimensionsForViewport() {
