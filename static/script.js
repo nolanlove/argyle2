@@ -1581,6 +1581,34 @@ class MusicalGrid {
         });
         if (!sheet || !toggle || !closeBtn || !backdrop || !body) return;
 
+        // Global tap diagnostic — shows the last tapped element's
+        // id/class/tag in a fixed bar at the very top of the screen so
+        // simulator screenshots can verify which element actually
+        // receives taps. Tap-bar updates every touchend at the document
+        // level (capture phase, before any handler can stopPropagation).
+        if (!document.getElementById('tap-debug-bar')) {
+            const bar = document.createElement('div');
+            bar.id = 'tap-debug-bar';
+            bar.style.cssText =
+                'position:fixed;top:0;left:0;right:0;z-index:9999;' +
+                'background:rgba(0,0,0,0.85);color:#0f0;' +
+                'font:11px/1.4 ui-monospace,monospace;' +
+                'padding:4px 8px;pointer-events:none;white-space:nowrap;overflow:hidden';
+            bar.textContent = 'tap target: (none yet)';
+            document.body.appendChild(bar);
+            const updateBar = (e) => {
+                const t = e.target;
+                if (!t) return;
+                const desc = `<${t.tagName.toLowerCase()}>` +
+                    (t.id ? `#${t.id}` : '') +
+                    (t.className ? `.${String(t.className).split(' ').slice(0, 2).join('.')}` : '');
+                bar.textContent = `${e.type}: ${desc}`;
+            };
+            document.addEventListener('touchstart', updateBar, true);
+            document.addEventListener('touchend', updateBar, true);
+            document.addEventListener('click', updateBar, true);
+        }
+
         const mainEl = document.querySelector('main.main');
 
         const moveSectionsIntoSheet = () => {
