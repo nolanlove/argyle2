@@ -1695,6 +1695,13 @@ class MusicalGrid {
         // and isn't subject to the touchstart→preventDefault click-suppression
         // path that the wrapper's gesture handler might trigger.
         toggle.addEventListener('pointerup', handleToggleEvent);
+
+        // Headless test hook — `?moretest=1` opens the sheet on load so
+        // automated screenshots can verify the open path without needing
+        // to drive the cursor.
+        if (new URLSearchParams(window.location.search).get('moretest') === '1') {
+            setTimeout(open, 300);
+        }
         closeBtn.addEventListener('click', close);
         backdrop.addEventListener('click', close);
         // Esc closes the sheet too — handy if the user is also on a
