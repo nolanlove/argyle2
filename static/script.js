@@ -1623,6 +1623,9 @@ class MusicalGrid {
         // open the sheet 3x for one tap.
         let lastOpenTs = 0;
         const handleToggleEvent = (e) => {
+            // Visible diagnostic — changes button label so screenshots can
+            // verify whether ANY event path is reaching JS.
+            toggle.textContent = `Tapped (${e.type})`;
             const now = performance.now();
             if (now - lastOpenTs < 300) {
                 if (e.type === 'touchend') e.preventDefault();
