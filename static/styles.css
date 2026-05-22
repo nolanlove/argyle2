@@ -1036,11 +1036,17 @@ body {
     margin: 8px auto 12px;
 }
 .more-sheet-header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 16px;
-    padding: 0 4px;
+    margin: 0 -16px 16px;
+    padding: 8px 20px 12px;
+    background: linear-gradient(180deg, #0f172a 0%, rgba(15, 23, 42, 0.95) 100%);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.08);
 }
 .more-sheet-header h2 {
     margin: 0;
@@ -1572,6 +1578,16 @@ body {
     .info-play-mode    { grid-column: 1; grid-row: 3; }
     .info-grid-labels  { grid-column: 2; grid-row: 3; }
     .info-clear        { grid-column: 3; grid-row: 3; }
+
+    /* The play-mode button's text is just the current mode name
+       (e.g. "Tap Chords"), which looks like a static label rather than
+       a toggle. Prefix with "Mode: " on mobile so the meaning is
+       obvious without rewriting the JS that swaps the text. */
+    .info-play-mode::before {
+        content: 'Mode: ';
+        font-weight: 500;
+        opacity: 0.72;
+    }
     /* "Clones" moves into the More sheet on mobile — its 4th-column slot
        is taken by the More button which exposes the full set of sections. */
     .info-toggle-clones { display: none !important; }
