@@ -32,6 +32,35 @@
     
     <!-- Web App Manifest -->
     <link rel="manifest" href="{% static 'manifest.json' %}">
+
+    <!-- Inline fallback to open the More sheet via raw DOM, independent of
+         the MusicalGrid class. If the class-driven path fails for any
+         reason (init error, late wiring, etc.), this still surfaces the
+         sheet. Defined in <head> so it's available before any tap. -->
+    <script>
+      window.openArgyleMoreSheet = function () {
+        try {
+          if (window.musicalGrid && window.musicalGrid._openMoreSheet) {
+            window.musicalGrid._openMoreSheet();
+            return;
+          }
+        } catch (e) { /* fall through to raw DOM path */ }
+        var sheet = document.getElementById('more-sheet');
+        if (!sheet) return;
+        // Move musical sections in so the sheet has content.
+        var body = document.getElementById('moreSheetBody');
+        if (body) {
+          var sections = document.querySelectorAll('main.main .musical-section, main.main .grid-controls');
+          for (var i = 0; i < sections.length; i++) body.appendChild(sections[i]);
+        }
+        sheet.removeAttribute('hidden');
+        sheet.style.display = 'block';
+        sheet.classList.add('is-open');
+        document.body.classList.add('more-sheet-open');
+        var panel = sheet.querySelector('.more-sheet-panel');
+        if (panel) { panel.style.transform = 'translateY(0)'; panel.style.opacity = '1'; }
+      };
+    </script>
     <link rel="stylesheet" href="{% static 'styles.css' %}?v={{ release_id }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -121,7 +150,7 @@
                          Inline onclick is a brute-force fallback so the
                          sheet opens even if the JS-attached listeners get
                          tangled with the wrapper's touch handler. -->
-                    <button class="btn btn-secondary info-more" id="moreSheetToggle" aria-label="More options" onclick="if (window.musicalGrid && window.musicalGrid._openMoreSheet) window.musicalGrid._openMoreSheet();">More</button>
+                    <button class="btn btn-secondary info-more" id="moreSheetToggle" aria-label="More options" onclick="window.openArgyleMoreSheet && window.openArgyleMoreSheet();">More</button>
                 </div>
                 <div class="grid-canvas">
                     <div id="grid-container"></div>
