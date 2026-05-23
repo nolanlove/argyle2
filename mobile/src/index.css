@@ -197,7 +197,9 @@ html, body, #root {
   height: 52px;
 }
 .chat-panel-open {
-  height: 60vh;
+  /* Lean default — leaves room for the grid to remain the hero. User can
+     drag the chat panel handle or scroll the message list if they want more. */
+  height: 45vh;
 }
 
 .chat-handle {
