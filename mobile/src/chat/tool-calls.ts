@@ -1,0 +1,230 @@
+/**
+ * Tool-call dispatcher: map an AI ToolCall (JSON args from the server) to a
+ * call on the ArgyleInstrument. Validates argument shape and returns a
+ * structured result so the chat loop can append a `role:tool` message and
+ * the UI can render an inline chip.
+ *
+ * Pure logic: takes an instrument-shaped argument so it's straightforward
+ * to test against a mock.
+ */
+
+import type {
+  ArgyleInstrument,
+  ProgressionStep,
+} from '../grid/api';
+import type { KeyMode } from '../core';
+import { getAllCloneCoordsForPitch, keys } from '../core';
+import type { CellCoord, ToolCall, ToolExecResult } from './types';
+
+// The grid dimensions are fixed at the mount site (Grid.tsx). Keep these in
+// sync — if they ever become dynamic, plumb through from there.
+const GRID_WIDTH = 20;
+const GRID_HEIGHT = 20;
+const ORIGIN_PITCH = 0;
+
+/** Subset of ArgyleInstrument the dispatcher actually calls. */
+export interface ToolTargetInstrument {
+  highlight: ArgyleInstrument['highlight'];
+  clearHighlight: ArgyleInstrument['clearHighlight'];
+  playChord: ArgyleInstrument['playChord'];
+  playNote: ArgyleInstrument['playNote'];
+  playProgression: ArgyleInstrument['playProgression'];
+  setKey: ArgyleInstrument['setKey'];
+}
+
+export interface ExecuteOpts {
+  /** Defaults to module-level grid constants; tests can override. */
+  gridWidth?: number;
+  gridHeight?: number;
+  originPitch?: number;
+}
+
+/**
+ * Execute one tool call against the instrument. Always resolves — bad input
+ * surfaces as `{ ok: false, error }`. Audio errors from the instrument do
+ * not throw here; they bubble as rejections from the called method, which
+ * we catch and convert.
+ */
+export async function executeToolCall(
+  instrument: ToolTargetInstrument,
+  call: ToolCall,
+  opts: ExecuteOpts = {},
+): Promise<ToolExecResult> {
+  const gw = opts.gridWidth ?? GRID_WIDTH;
+  const gh = opts.gridHeight ?? GRID_HEIGHT;
+  const origin = opts.originPitch ?? ORIGIN_PITCH;
+
+  try {
+    switch (call.name) {
+      case 'highlight_cells': {
+        const cells = validateCells(call.arguments['cells']);
+        if (!cells.ok) return cells;
+        const duration = optionalPositiveInt(call.arguments['duration_ms']);
+        if (!duration.ok) return duration;
+        instrument.highlight(cells.value, duration.value !== undefined
+          ? { durationMs: duration.value }
+          : undefined);
+        return { ok: true, summary: `highlighted ${cells.value.length} cell(s)` };
+      }
+      case 'clear_highlight': {
+        instrument.clearHighlight();
+        return { ok: true, summary: 'cleared highlights' };
+      }
+      case 'play_note': {
+        const cell = validateCell(call.arguments['cell']);
+        if (!cell.ok) return cell;
+        const duration = optionalPositiveInt(call.arguments['duration_ms']);
+        if (!duration.ok) return duration;
+        await instrument.playNote(cell.value, duration.value);
+        return { ok: true, summary: `played note (${cell.value.x},${cell.value.y})` };
+      }
+      case 'play_chord': {
+        const cells = validateCells(call.arguments['cells']);
+        if (!cells.ok) return cells;
+        const duration = optionalPositiveInt(call.arguments['duration_ms']);
+        if (!duration.ok) return duration;
+        await instrument.playChord(cells.value, duration.value);
+        return { ok: true, summary: `played chord of ${cells.value.length} note(s)` };
+      }
+      case 'play_progression': {
+        const stepsArg = call.arguments['steps'];
+        if (!Array.isArray(stepsArg) || stepsArg.length === 0) {
+          return fail('steps must be a non-empty array');
+        }
+        const steps: ProgressionStep[] = [];
+        for (const s of stepsArg) {
+          if (!isObject(s)) return fail('each step must be an object');
+          const cells = validateCells((s as Record<string, unknown>)['cells']);
+          if (!cells.ok) return cells;
+          const dur = (s as Record<string, unknown>)['duration_ms'];
+          if (!isPositiveInt(dur)) {
+            return fail('each step.duration_ms must be a positive integer');
+          }
+          const label = (s as Record<string, unknown>)['label'];
+          const step: ProgressionStep = { cells: cells.value, durationMs: dur };
+          if (typeof label === 'string') step.label = label;
+          steps.push(step);
+        }
+        await instrument.playProgression(steps);
+        return { ok: true, summary: `played progression (${steps.length} step(s))` };
+      }
+      case 'set_key': {
+        const pc = call.arguments['root_pitch_class'];
+        if (!isPositiveInt(pc, /*allowZero*/ true) || (pc as number) > 11) {
+          return fail('root_pitch_class must be 0..11');
+        }
+        const mode = call.arguments['mode'];
+        if (typeof mode !== 'string' || !(mode in keys)) {
+          return fail(`unknown key mode: ${String(mode)}`);
+        }
+        instrument.setKey(pc as number, mode as KeyMode);
+        return { ok: true, summary: `set key to pc=${pc} ${mode}` };
+      }
+      case 'play_pattern_from_pitches': {
+        const pitchesArg = call.arguments['pitches'];
+        if (!Array.isArray(pitchesArg) || pitchesArg.length === 0) {
+          return fail('pitches must be a non-empty array');
+        }
+        const pitches: number[] = [];
+        for (const p of pitchesArg) {
+          if (!isPositiveInt(p, true) || (p as number) > 127) {
+            return fail('each pitch must be a MIDI integer 0..127');
+          }
+          pitches.push(p as number);
+        }
+        const voicing = call.arguments['voicing'];
+        if (voicing !== 'block' && voicing !== 'arpeggio_up' && voicing !== 'arpeggio_down') {
+          return fail('voicing must be block | arpeggio_up | arpeggio_down');
+        }
+        const durRes = optionalPositiveInt(call.arguments['duration_ms']);
+        if (!durRes.ok) return durRes;
+        const stepRes = optionalPositiveInt(call.arguments['step_ms']);
+        if (!stepRes.ok) return stepRes;
+        const duration = durRes.value ?? 600;
+        const stepMs = stepRes.value ?? 300;
+
+        const cellsForPitch = (p: number): CellCoord | null => {
+          const clones = getAllCloneCoordsForPitch(p, origin, gw, gh);
+          if (clones.length === 0) return null;
+          // Prefer the smallest-y (lowest visual position) clone.
+          const sorted = [...clones].sort((a, b) => a.y - b.y || a.x - b.x);
+          const first = sorted[0];
+          return first ? { x: first.x, y: first.y } : null;
+        };
+
+        if (voicing === 'block') {
+          const cells: CellCoord[] = [];
+          for (const p of pitches) {
+            const c = cellsForPitch(p);
+            if (c) cells.push(c);
+          }
+          if (cells.length === 0) return fail('no pitches resolved to grid cells');
+          await instrument.playChord(cells, duration);
+          return { ok: true, summary: `played block voicing of ${cells.length} note(s)` };
+        }
+        const ordered = voicing === 'arpeggio_up'
+          ? [...pitches].sort((a, b) => a - b)
+          : [...pitches].sort((a, b) => b - a);
+        const steps: ProgressionStep[] = [];
+        for (const p of ordered) {
+          const c = cellsForPitch(p);
+          if (!c) continue;
+          steps.push({ cells: [c], durationMs: stepMs });
+        }
+        if (steps.length === 0) return fail('no pitches resolved to grid cells');
+        await instrument.playProgression(steps);
+        return { ok: true, summary: `played ${voicing} arpeggio (${steps.length} note(s))` };
+      }
+      default:
+        return fail(`unknown tool: ${call.name}`);
+    }
+  } catch (err) {
+    return fail(`execution error: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+// ---- validators ----
+
+type Validated<T> = { ok: true; value: T } | { ok: false; error: string };
+
+function fail(error: string): { ok: false; error: string } {
+  return { ok: false, error };
+}
+
+function isObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+function isPositiveInt(v: unknown, allowZero = false): v is number {
+  if (typeof v !== 'number' || !Number.isFinite(v) || !Number.isInteger(v)) return false;
+  return allowZero ? v >= 0 : v > 0;
+}
+
+function validateCell(v: unknown): Validated<CellCoord> {
+  if (!isObject(v)) return fail('cell must be an object');
+  const x = v['x'];
+  const y = v['y'];
+  if (!isPositiveInt(x, true) || !isPositiveInt(y, true)) {
+    return fail('cell.x and cell.y must be non-negative integers');
+  }
+  return { ok: true, value: { x: x as number, y: y as number } };
+}
+
+function validateCells(v: unknown): Validated<CellCoord[]> {
+  if (!Array.isArray(v) || v.length === 0) {
+    return fail('cells must be a non-empty array');
+  }
+  const out: CellCoord[] = [];
+  for (const c of v) {
+    const r = validateCell(c);
+    if (!r.ok) return r;
+    out.push(r.value);
+  }
+  return { ok: true, value: out };
+}
+
+function optionalPositiveInt(v: unknown): Validated<number | undefined> {
+  if (v === undefined || v === null) return { ok: true, value: undefined };
+  if (!isPositiveInt(v)) return fail('duration_ms must be a positive integer');
+  return { ok: true, value: v as number };
+}

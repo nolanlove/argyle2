@@ -1,0 +1,48 @@
+.git
+.gitignore
+.github
+.DS_Store
+**/.DS_Store
+
+# Local env / virtualenvs
+venv/
+env/
+ENV/
+.venv/
+.env
+.env.local
+.env.*.local
+
+# Local SQLite / dev DB
+db.sqlite3
+db.sqlite3-journal
+
+# Build artifacts (collectstatic runs in the image)
+staticfiles/
+
+# Test / cache
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.tox/
+.coverage
+htmlcov/
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+
+# Local data dumps
+*.sqlite3-dump
+data_dump.json
+
+# Docs not needed at runtime
+MIGRATION_NOTES.md
+README.md
+
+# Mobile React source — only the built output in static/mobile/ is needed at runtime.
+# Build locally with `cd mobile && npm run build` before `fly deploy`.
+mobile/

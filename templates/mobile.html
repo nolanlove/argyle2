@@ -1,0 +1,26 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Argyle">
+    <title>Argyle</title>
+
+    <!-- Web App Icons -->
+    <link rel="icon" href="{% static 'favicon.ico' %}?v=1" sizes="any">
+    <link rel="apple-touch-icon" href="{% static 'apple-touch-icon.png' %}">
+    <link rel="manifest" href="{% static 'manifest.json' %}">
+
+    <!-- Mobile React bundle. Build with `cd mobile && npm run build`; output
+         lands in /static/mobile/. Asset filenames are fixed by vite.config.ts
+         so this template doesn't need a manifest. -->
+    <link rel="stylesheet" href="{% static 'mobile/index.css' %}?v={{ release_id }}">
+</head>
+<body>
+    <div id="root"></div>
+    <script type="module" src="{% static 'mobile/index.js' %}?v={{ release_id }}"></script>
+</body>
+</html>

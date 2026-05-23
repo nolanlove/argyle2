@@ -24,14 +24,20 @@ urlpatterns = [
     # API endpoints (keep for backward compatibility with frontend)
     path('api/health', views.health_check, name='health'),
     path('api/openai/chat', views.openai_chat, name='openai-chat'),
+    path('api/mobile/chat/', views.mobile_chat, name='mobile-chat'),
     path('api/auth/login', views.login, name='api-login'),
     path('api/auth/signup', views.signup, name='api-signup'),
     path('api/auth/logout', views.logout, name='api-logout'),
     path('api/auth/me', views.get_current_user, name='api-me'),
     path('api/', include(router.urls)),
     
-    # Serve frontend
+    # Serve frontend (desktop — frozen, do not change).
     path('', TemplateView.as_view(template_name='index.html'), name='home'),
+
+    # Mobile rewrite (React + TS at mobile/, built to static/mobile/).
+    # Lives in parallel to the desktop app and shares only the backend API.
+    path('m/', TemplateView.as_view(template_name='mobile.html'), name='mobile'),
+    path('m', TemplateView.as_view(template_name='mobile.html')),
 ]
 
 # Serve static files in development

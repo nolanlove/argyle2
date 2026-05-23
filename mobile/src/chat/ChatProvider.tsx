@@ -1,0 +1,251 @@
+/**
+ * ChatProvider owns the conversation state and the send/receive loop.
+ *
+ * Responsibilities:
+ *   - hold messages[] (UI-visible) and a parallel set of streaming markers
+ *   - POST to /api/mobile/chat/ and consume the SSE generator
+ *   - on each tool_call event: execute against the live instrument, append
+ *     a `role:tool` message to history, and if the assistant's turn finished
+ *     with finish_reason='tool_calls', automatically fire a follow-up turn
+ *     so the model can produce its closing narration.
+ *
+ * Owned by the panel — descendants consume via useChat().
+ */
+
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import type { ReactNode } from 'react';
+import { useInstrument } from '../grid/InstrumentContext';
+import type { ArgyleInstrument } from '../grid/api';
+import { streamChat } from './api';
+import { executeToolCall } from './tool-calls';
+import type {
+  ChatMessage,
+  ToolCall,
+  ToolExecResult,
+} from './types';
+
+interface ChatContextValue {
+  messages: ChatMessage[];
+  /** True while a request is in flight (network OR tool execution loop). */
+  busy: boolean;
+  /** Last error message, if any. Cleared on next send. */
+  error: string | null;
+  send(text: string): void;
+  /** Inline-rendered chip log of executed tool calls for the UI. */
+  toolLog: ExecutedTool[];
+}
+
+export interface ExecutedTool {
+  id: string;
+  name: string;
+  result: ToolExecResult;
+}
+
+const ChatContext = createContext<ChatContextValue | null>(null);
+
+const WELCOME: ChatMessage = {
+  role: 'assistant',
+  content: "Welcome — want to explore a key, learn a progression, or just play?",
+};
+
+export function ChatProvider(props: { children: ReactNode }) {
+  const instrument = useInstrument();
+  const instrumentRef = useRef<ArgyleInstrument | null>(instrument);
+  useEffect(() => { instrumentRef.current = instrument; }, [instrument]);
+
+  const [messages, setMessages] = useState<ChatMessage[]>([WELCOME]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [toolLog, setToolLog] = useState<ExecutedTool[]>([]);
+
+  // Single in-flight request guard — abort + ignore late events on resend.
+  const abortRef = useRef<AbortController | null>(null);
+
+  const send = useCallback((text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    setError(null);
+    const userMsg: ChatMessage = { role: 'user', content: trimmed };
+    setMessages((prev) => [...prev, userMsg]);
+    void runTurn([...messagesRef.current, userMsg]);
+  // We thread the latest messages array through a ref to avoid stale-closure
+  // bugs across the multi-step tool-result loop.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep a live ref to messages for the async loop.
+  const messagesRef = useRef<ChatMessage[]>(messages);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+
+  // Debug hook: ?say=... in the URL auto-sends that message once on mount,
+  // for headless verification of the AI flow without keystroke injection.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const say = params.get('say');
+    if (say) send(say);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /**
+   * Run one assistant turn (with up to N follow-up turns if the model only
+   * emitted tool calls). Each iteration:
+   *   1. POST current history → stream events
+   *   2. accumulate text into a placeholder assistant message
+   *   3. on tool_call events: execute, append `role:tool` result, remember
+   *      we owe the model another turn if it finished with tool_calls only
+   *   4. loop until finish_reason !== 'tool_calls' or budget exhausted.
+   */
+  const runTurn = useCallback(async (initial: ChatMessage[]) => {
+    setBusy(true);
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
+
+    let history = initial;
+    const maxFollowups = 3;
+    let followups = 0;
+
+    try {
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        // Add an empty assistant placeholder we'll mutate as text streams in.
+        const placeholder: ChatMessage = { role: 'assistant', content: '' };
+        setMessages((prev) => [...prev, placeholder]);
+        history = [...history, placeholder];
+        const assistantIdx = history.length - 1;
+
+        let finishReason = 'stop';
+        const collectedToolCalls: ToolCall[] = [];
+        let accumulatedText = '';
+
+        const stream = streamChat({
+          messages: messagesForServer(history.slice(0, -1)),
+          signal: ac.signal,
+        });
+
+        for await (const evt of stream) {
+          if (ac.signal.aborted) return;
+          if (evt.type === 'text') {
+            accumulatedText += evt.delta;
+            const snapshot = accumulatedText;
+            setMessages((prev) => updateAt(prev, assistantIdx, (m) => ({
+              ...m,
+              content: snapshot,
+            })));
+          } else if (evt.type === 'tool_call') {
+            collectedToolCalls.push(evt.call);
+          } else if (evt.type === 'done') {
+            finishReason = evt.finishReason;
+          } else if (evt.type === 'error') {
+            setError(evt.error);
+            return;
+          }
+        }
+
+        // Persist tool_calls on the assistant message so the next request's
+        // history (and the OpenAI server-side expectation that tool messages
+        // follow an assistant message with tool_calls) is consistent.
+        if (collectedToolCalls.length > 0) {
+          setMessages((prev) => updateAt(prev, assistantIdx, (m) => ({
+            ...m,
+            tool_calls: collectedToolCalls,
+          })));
+          history = updateAt(history, assistantIdx, (m) => ({
+            ...m,
+            tool_calls: collectedToolCalls,
+          }));
+        }
+
+        // Execute each tool call sequentially. Sequential because the
+        // instrument's playProgression / playChord are timed — running in
+        // parallel would stack audio + highlights chaotically and the model
+        // typically intends them as an ordered demonstration.
+        for (const call of collectedToolCalls) {
+          const inst = instrumentRef.current;
+          let result: ToolExecResult;
+          if (!inst) {
+            result = { ok: false, error: 'instrument not mounted' };
+          } else {
+            result = await executeToolCall(inst, call);
+          }
+          setToolLog((prev) => [...prev, { id: call.id, name: call.name, result }]);
+          const toolMsg: ChatMessage = {
+            role: 'tool',
+            tool_call_id: call.id,
+            content: result.ok ? result.summary : `error: ${result.error}`,
+          };
+          setMessages((prev) => [...prev, toolMsg]);
+          history = [...history, toolMsg];
+        }
+
+        if (finishReason !== 'tool_calls' || collectedToolCalls.length === 0) {
+          return;
+        }
+        followups++;
+        if (followups >= maxFollowups) return;
+      }
+    } catch (err) {
+      if ((err as { name?: string }).name === 'AbortError') return;
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      if (abortRef.current === ac) {
+        abortRef.current = null;
+        setBusy(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => () => abortRef.current?.abort(), []);
+
+  const value = useMemo<ChatContextValue>(() => ({
+    messages, busy, error, send, toolLog,
+  }), [messages, busy, error, send, toolLog]);
+
+  return <ChatContext.Provider value={value}>{props.children}</ChatContext.Provider>;
+}
+
+export function useChat(): ChatContextValue {
+  const v = useContext(ChatContext);
+  if (!v) throw new Error('useChat must be used inside <ChatProvider>');
+  return v;
+}
+
+// ---- helpers ----
+
+function updateAt<T>(arr: T[], idx: number, fn: (item: T) => T): T[] {
+  if (idx < 0 || idx >= arr.length) return arr;
+  const next = arr.slice();
+  const item = next[idx];
+  if (item === undefined) return arr;
+  next[idx] = fn(item);
+  return next;
+}
+
+/**
+ * Strip UI-only message shapes the server doesn't need. We keep tool_calls
+ * on assistant messages (OpenAI requires them to bind subsequent tool
+ * messages) and pass tool messages through verbatim.
+ */
+function messagesForServer(history: ChatMessage[]): ChatMessage[] {
+  return history.map((m) => {
+    if (m.role === 'assistant') {
+      const out: ChatMessage = { role: 'assistant', content: m.content };
+      if (m.tool_calls && m.tool_calls.length > 0) out.tool_calls = m.tool_calls;
+      return out;
+    }
+    if (m.role === 'tool') {
+      const out: ChatMessage = { role: 'tool', content: m.content };
+      if (m.tool_call_id) out.tool_call_id = m.tool_call_id;
+      return out;
+    }
+    return { role: m.role, content: m.content };
+  });
+}
