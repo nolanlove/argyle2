@@ -1677,6 +1677,33 @@ class MusicalGrid {
                 const btn = document.getElementById('moreSheetToggle');
                 if (btn) btn.click();
             }, 400);
+        } else if (moretest === 'tap') {
+            // Synthesize an actual touchstart + touchend sequence on the
+            // More button — this exercises the same event path a real
+            // finger tap goes through (touch events → click synthesis),
+            // unlike `?moretest=click` which bypasses touch entirely.
+            setTimeout(() => {
+                const btn = document.getElementById('moreSheetToggle');
+                if (!btn) return;
+                const rect = btn.getBoundingClientRect();
+                const cx = rect.left + rect.width / 2;
+                const cy = rect.top + rect.height / 2;
+                const touchInit = (id) => new Touch({
+                    identifier: id, target: btn,
+                    clientX: cx, clientY: cy, pageX: cx, pageY: cy,
+                });
+                const touch = touchInit(1);
+                btn.dispatchEvent(new TouchEvent('touchstart', {
+                    bubbles: true, cancelable: true,
+                    touches: [touch], targetTouches: [touch], changedTouches: [touch],
+                }));
+                setTimeout(() => {
+                    btn.dispatchEvent(new TouchEvent('touchend', {
+                        bubbles: true, cancelable: true,
+                        touches: [], targetTouches: [], changedTouches: [touch],
+                    }));
+                }, 30);
+            }, 400);
         }
         closeBtn.addEventListener('click', close);
         backdrop.addEventListener('click', close);
