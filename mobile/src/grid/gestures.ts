@@ -191,6 +191,13 @@ export class GridGestures {
   }
 
   private firePlay(hit: HitCell): void {
+    // Visual feedback fires on every tap/drag-into-cell regardless of who
+    // owns audio playback (autoPlayOnHit=false routes audio through the
+    // instrument layer, but the user still deserves a flash).
+    this.renderer.highlightCells(
+      [{ x: hit.gx, y: hit.gy }],
+      { className: 'cell-flash', durationMs: 350 },
+    );
     if (!this.autoPlayOnHit) return;
     if (this.audio.isReady()) {
       this.audio.playNote(hit.pitch);
