@@ -47,3 +47,6 @@ data_dump.json
 mobile/node_modules/
 /static/mobile/
 
+
+# Vitest cache (was accidentally committed once; keep ignored)
+node_modules/.vite/
