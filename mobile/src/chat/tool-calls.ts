@@ -206,6 +206,62 @@ export async function executeToolCall(
         }
         return { ok: true, summary: `played ${voicing} ${ordered.length} note(s)` };
       }
+      case 'play_progression_from_pitches': {
+        const stepsArg = call.arguments['steps'];
+        if (!Array.isArray(stepsArg) || stepsArg.length === 0) {
+          return fail('steps must be a non-empty array');
+        }
+        // Validate every step up front so we don't half-play on bad input.
+        type Step = { pitches: number[]; durationMs: number; label?: string };
+        const parsed: Step[] = [];
+        for (let i = 0; i < stepsArg.length; i++) {
+          const s = stepsArg[i];
+          if (!s || typeof s !== 'object') return fail(`step ${i}: must be object`);
+          const sp = s as Record<string, unknown>;
+          const pitches = sp['pitches'];
+          if (!Array.isArray(pitches) || pitches.length === 0) {
+            return fail(`step ${i}: pitches must be non-empty array`);
+          }
+          const ps: number[] = [];
+          for (const p of pitches) {
+            if (typeof p !== 'number' || !Number.isInteger(p) || p < 0 || p > 127) {
+              return fail(`step ${i}: each pitch must be MIDI 0..127`);
+            }
+            ps.push(p);
+          }
+          const d = sp['duration_ms'];
+          if (typeof d !== 'number' || !Number.isInteger(d) || d < 1) {
+            return fail(`step ${i}: duration_ms must be positive integer`);
+          }
+          const step: Step = { pitches: ps, durationMs: d };
+          if (typeof sp['label'] === 'string') step.label = sp['label'];
+          parsed.push(step);
+        }
+        const cellsForPitch = (p: number): CellCoord | null => {
+          const clones = getAllCloneCoordsForPitch(p, origin, gw, gh);
+          if (clones.length === 0) return null;
+          const sorted = [...clones].sort((a, b) => a.y - b.y || a.x - b.x);
+          const first = sorted[0];
+          return first ? { x: first.x, y: first.y } : null;
+        };
+        const audio = await getAudio();
+        for (const step of parsed) {
+          const cells: CellCoord[] = [];
+          for (const p of step.pitches) {
+            const c = cellsForPitch(p);
+            if (c) cells.push(c);
+          }
+          if (cells.length > 0) instrument.highlight(cells, { durationMs: step.durationMs });
+          audio.tag(`ai-prog${step.label ? `:${step.label}` : ''}`)
+               .playChord(step.pitches, step.durationMs);
+          await new Promise<void>((r) => setTimeout(r, step.durationMs));
+          instrument.clearHighlight();
+        }
+        const summary = parsed
+          .map((s) => s.label ?? pitchListLabel(s.pitches))
+          .join(' → ');
+        return { ok: true, summary: `progression: ${summary}` };
+      }
       default:
         return fail(`unknown tool: ${call.name}`);
     }

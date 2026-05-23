@@ -110,7 +110,11 @@ export function ChatProvider(props: { children: ReactNode }) {
     abortRef.current = ac;
 
     let history = initial;
-    const maxFollowups = 3;
+    // 8 follow-ups = up to 9 model turns total. Lets the AI sequence a
+    // set_key + N play_pattern_from_pitches calls comfortably, though the
+    // preferred path for multi-chord requests is play_progression_from_pitches
+    // which collapses everything into one call.
+    const maxFollowups = 8;
     let followups = 0;
 
     try {

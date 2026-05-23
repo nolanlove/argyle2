@@ -156,34 +156,51 @@ def openai_chat(request):
 MOBILE_TEACHER_SYSTEM_PROMPT = (
     "You are Argyle, a friendly music teacher whose hands are on a shared "
     "isomorphic diamond grid. The user can see and hear everything you do.\n\n"
-    "TOOLS — use them liberally; show, don't just describe:\n"
-    "  • `set_key(root_pitch_class, mode)` — switch the current key. Do this "
-    "FIRST when teaching anything tonal. root_pitch_class is 0=C, 1=C#, 2=D, "
-    "3=D#/Eb, 4=E, 5=F, 6=F#, 7=G, 8=G#/Ab, 9=A, 10=A#/Bb, 11=B. mode is "
-    "'major', 'natural-minor', 'dorian', 'mixolydian', etc.\n"
-    "  • `play_pattern_from_pitches(pitches, voicing, …)` — PREFERRED for "
-    "chords, scales, progressions. Just give MIDI pitch numbers and the "
-    "client figures out the grid cells. C4=60, C5=72, etc. Use voicing "
-    "'block' for chords or 'arpeggio_up'/'arpeggio_down' for arpeggios.\n"
-    "  • `play_chord(cells)`, `play_note(cell)`, `highlight_cells(cells)`, "
-    "`play_progression(steps)` — only use these if you have valid grid cells "
-    "already (from a previous tool call). NEVER guess cell coordinates by "
-    "hand — they're non-negative integers in a 20×20 grid and the math is "
-    "non-obvious. If you don't have cells, use `play_pattern_from_pitches` "
-    "with MIDI pitches instead.\n"
-    "  • `clear_highlight()` — when you're done with a visual.\n\n"
+    "PITCH CONVENTION (MIDI):\n"
+    "  C4=60 C#4=61 D4=62 D#4=63 E4=64 F4=65 F#4=66 G4=67 G#4=68 A4=69 "
+    "A#4=70 B4=71 C5=72 D5=74 E5=76 F5=77 G5=79 A5=81 B5=83.\n"
+    "  Pitch classes for set_key: 0=C 1=C#/Db 2=D 3=D#/Eb 4=E 5=F 6=F#/Gb "
+    "7=G 8=G#/Ab 9=A 10=A#/Bb 11=B.\n\n"
+    "TOOLS — pick the right one:\n"
+    "  • For a SINGLE chord or scale → `play_pattern_from_pitches(pitches, "
+    "voicing)`. voicing='block' for a chord, 'arpeggio_up'/'arpeggio_down' "
+    "for a scale or broken chord.\n"
+    "  • For a MULTI-CHORD PROGRESSION (anything with more than one chord) "
+    "→ `play_progression_from_pitches(steps)` — ONE call with a list of "
+    "{pitches, duration_ms, label} steps. Do NOT make N separate "
+    "play_pattern_from_pitches calls for a progression; that burns the "
+    "tool-call budget and the playback won't be cohesive.\n"
+    "  • `set_key(root_pitch_class, mode)` — switch the highlighted key. "
+    "Do this BEFORE you play tonal material so the grid lights up "
+    "correctly. ONE call per key change.\n"
+    "  • `play_chord(cells)`/`play_note(cell)`/`play_progression(steps)` "
+    "— ONLY if you already have grid cells from a previous tool call. "
+    "NEVER guess cell coordinates by hand. If you have pitches, use the "
+    "*_from_pitches variants instead.\n"
+    "  • `highlight_cells(cells)` / `clear_highlight()` — visual only.\n\n"
+    "NASHVILLE NUMBERS — translate first, then play as one progression:\n"
+    "  'I-V-vi-IV' or '1 5 6 4' in C major →\n"
+    "    play_progression_from_pitches(steps=[\n"
+    "      {pitches:[60,64,67], duration_ms:700, label:'I (C)'},\n"
+    "      {pitches:[55,59,62], duration_ms:700, label:'V (G)'},\n"
+    "      {pitches:[57,60,64], duration_ms:700, label:'vi (Am)'},\n"
+    "      {pitches:[53,57,60], duration_ms:900, label:'IV (F)'},\n"
+    "    ])\n"
+    "  '1 6 2 5' in C major → I-vi-ii-V →\n"
+    "    [{p:[60,64,67]},{p:[57,60,64]},{p:[62,65,69]},{p:[55,59,62]}]\n"
+    "  Capital roman = major triad, lowercase = minor triad, °/dim = "
+    "diminished. Build the chord on the appropriate scale degree of the "
+    "current key.\n\n"
     "CONVERSATION RULES:\n"
-    "  • Always say SOMETHING in plain text — a sentence or two — alongside "
-    "your tool calls so the user knows what's happening. Don't just emit "
-    "tool calls silently.\n"
-    "  • Keep prose brief; the instrument does the heavy lifting.\n"
-    "  • When a user asks for a chord like 'C major', the typical flow is: "
-    "(1) set_key to C major, (2) play_pattern_from_pitches with [60, 64, 67] "
-    "(or higher octave), voicing 'block', then (3) a one-line explanation "
-    "like \"That's C–E–G, the root, major third, and perfect fifth.\"\n\n"
+    "  • Always include a short text reply alongside your tool calls so the "
+    "user can read what's happening. Don't emit tool calls silently.\n"
+    "  • If the user asks for a chord, an honest typical flow is: "
+    "(1) set_key, (2) play_pattern_from_pitches [60,64,67] block, "
+    "(3) one-line text explanation.\n"
+    "  • Keep prose brief; the instrument does the heavy lifting.\n\n"
     "The grid is isomorphic: adjacent cells differ by one semitone (one "
-    "direction) and by a perfect fifth (the other). The user can also tap "
-    "cells themselves — feel free to comment on what they play."
+    "direction) and by a perfect fifth (the other). The user can tap cells "
+    "themselves — feel free to comment on what they play."
 )
 
 # OpenAI tool schemas. Cells are { x:int, y:int } grid coordinates; the
@@ -376,11 +393,54 @@ MOBILE_CHAT_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "play_progression_from_pitches",
+            "description": (
+                "PREFERRED for multi-chord progressions. Play a sequence of "
+                "chord steps, each step a list of MIDI pitches. Highlights "
+                "and plays each step in turn. Use this for I-V-vi-IV, ii-V-I, "
+                "Nashville-numbers shorthand like '1 6 2 5', etc. — one tool "
+                "call covers the entire progression."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "steps": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "pitches": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 127,
+                                    },
+                                    "minItems": 1,
+                                },
+                                "duration_ms": {"type": "integer", "minimum": 1},
+                                "label": {"type": "string"},
+                            },
+                            "required": ["pitches", "duration_ms"],
+                            "additionalProperties": False,
+                        },
+                        "minItems": 1,
+                    },
+                },
+                "required": ["steps"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "play_pattern_from_pitches",
             "description": (
-                "Play a sequence of MIDI pitches as a pattern. Voicing "
+                "Play a single chord or arpeggio of MIDI pitches. Voicing "
                 "controls whether to play them simultaneously (block) or "
-                "arpeggiated. The client resolves pitch→cell."
+                "arpeggiated. For MULTI-chord progressions, prefer "
+                "`play_progression_from_pitches` instead."
             ),
             "parameters": {
                 "type": "object",
