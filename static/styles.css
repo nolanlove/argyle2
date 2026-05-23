@@ -1463,11 +1463,22 @@ button:active,
 
     /* Make #info-background transparent so its grandchildren (the .info-*
        buttons inside .info-pair wrappers, plus the four standalone action
-       buttons) become direct grid items of .grid-wrapper. */
+       buttons) become direct grid items of .grid-wrapper. The desktop
+       rule sets `pointer-events: none` on #info-background — with
+       display:contents iOS Safari was propagating that to descendants
+       and making the More button invisible to taps (elementsFromPoint
+       returned .grid-wrapper instead of the button). Force pointer-events
+       back to auto. */
     #info-background {
         display: contents;
         position: static;
         transform: none;
+        pointer-events: auto;
+    }
+    #info-background > *,
+    .info-pair,
+    .info-pair > * {
+        pointer-events: auto;
     }
 
     /* On mobile the wrappers become real flex pills. */
