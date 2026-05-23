@@ -32,7 +32,7 @@
     
     <!-- Web App Manifest -->
     <link rel="manifest" href="{% static 'manifest.json' %}">
-    <link rel="stylesheet" href="{% static 'styles.css' %}?v=54">
+    <link rel="stylesheet" href="{% static 'styles.css' %}?v={{ release_id }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -117,8 +117,11 @@
                     <button class="btn btn-secondary info-grid-labels" id="gridLabelsToggle">Grid Labels</button>
                     <button class="btn btn-secondary info-clear" id="clearMusical">Clear</button>
                     <button class="btn btn-secondary info-toggle-clones" id="toggleClones">Clones</button>
-                    <!-- Mobile-only entry point to the slide-up More sheet. -->
-                    <button class="btn btn-secondary info-more" id="moreSheetToggle" aria-label="More options">More</button>
+                    <!-- Mobile-only entry point to the slide-up More sheet.
+                         Inline onclick is a brute-force fallback so the
+                         sheet opens even if the JS-attached listeners get
+                         tangled with the wrapper's touch handler. -->
+                    <button class="btn btn-secondary info-more" id="moreSheetToggle" aria-label="More options" onclick="if (window.musicalGrid && window.musicalGrid._openMoreSheet) window.musicalGrid._openMoreSheet();">More</button>
                 </div>
                 <div class="grid-canvas">
                     <div id="grid-container"></div>
@@ -306,8 +309,8 @@
     </div>
     
     <script src="https://unpkg.com/tone@14.7.77/build/Tone.js"></script>
-    <script type="module" src="{% static 'script.js' %}?v=54"></script>
-    <script type="module" src="{% static 'chatbot.js' %}?v=54"></script>
-    <script src="{% static 'auth-ui.js' %}?v=54"></script>
+    <script type="module" src="{% static 'script.js' %}?v={{ release_id }}"></script>
+    <script type="module" src="{% static 'chatbot.js' %}?v={{ release_id }}"></script>
+    <script src="{% static 'auth-ui.js' %}?v={{ release_id }}"></script>
 </body>
 </html> 

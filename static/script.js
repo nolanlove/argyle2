@@ -1590,49 +1590,7 @@ class MusicalGrid {
         const closeBtn = document.getElementById('moreSheetClose');
         const backdrop = document.getElementById('moreSheetBackdrop');
         const body = document.getElementById('moreSheetBody');
-        console.log('[more-sheet] setup', {
-            sheet: !!sheet, toggle: !!toggle, closeBtn: !!closeBtn,
-            backdrop: !!backdrop, body: !!body,
-        });
         if (!sheet || !toggle || !closeBtn || !backdrop || !body) return;
-
-        // Global tap diagnostic — shows the last tapped element's
-        // id/class/tag in a fixed bar at the very top of the screen so
-        // simulator screenshots can verify which element actually
-        // receives taps. Tap-bar updates every touchend at the document
-        // level (capture phase, before any handler can stopPropagation).
-        if (!document.getElementById('tap-debug-bar')) {
-            const bar = document.createElement('div');
-            bar.id = 'tap-debug-bar';
-            bar.style.cssText =
-                'position:fixed;top:0;left:0;right:0;z-index:9999;' +
-                'background:rgba(0,0,0,0.85);color:#0f0;' +
-                'font:11px/1.4 ui-monospace,monospace;' +
-                'padding:4px 8px;pointer-events:none;white-space:nowrap;overflow:hidden';
-            bar.textContent = 'tap target: (none yet)';
-            document.body.appendChild(bar);
-            // Also show viewport + More button bounding box.
-            setTimeout(() => {
-                const moreBtn = document.getElementById('moreSheetToggle');
-                const wrap = document.querySelector('.grid-wrapper');
-                const moreRect = moreBtn ? moreBtn.getBoundingClientRect() : null;
-                const wrapRect = wrap ? wrap.getBoundingClientRect() : null;
-                bar.textContent = `vw=${window.innerWidth}x${window.innerHeight}` +
-                    ` more=${moreRect ? `${Math.round(moreRect.x)},${Math.round(moreRect.y)} ${Math.round(moreRect.width)}x${Math.round(moreRect.height)}` : 'null'}` +
-                    ` wrap=${wrapRect ? `${Math.round(wrapRect.x)},${Math.round(wrapRect.y)} ${Math.round(wrapRect.width)}x${Math.round(wrapRect.height)}` : 'null'}`;
-            }, 400);
-            const updateBar = (e) => {
-                const t = e.target;
-                if (!t) return;
-                const desc = `<${t.tagName.toLowerCase()}>` +
-                    (t.id ? `#${t.id}` : '') +
-                    (t.className ? `.${String(t.className).split(' ').slice(0, 2).join('.')}` : '');
-                bar.textContent = `${e.type}: ${desc}`;
-            };
-            document.addEventListener('touchstart', updateBar, true);
-            document.addEventListener('touchend', updateBar, true);
-            document.addEventListener('click', updateBar, true);
-        }
 
         const mainEl = document.querySelector('main.main');
 
@@ -1656,13 +1614,19 @@ class MusicalGrid {
 
         const open = () => {
             moveSectionsIntoSheet();
-            // Bypass the [hidden] attribute path entirely — set display
-            // and the open class so CSS we control owns the visibility.
             sheet.hidden = false;
             sheet.removeAttribute('hidden');
             sheet.style.display = 'block';
             sheet.classList.add('is-open');
             document.body.classList.add('more-sheet-open');
+            // Force the panel to its visible state explicitly — belt and
+            // suspenders against any stale transform or opacity that
+            // might leave it off-screen.
+            const panel = sheet.querySelector('.more-sheet-panel');
+            if (panel) {
+                panel.style.transform = 'translateY(0)';
+                panel.style.opacity = '1';
+            }
         };
         const close = () => {
             sheet.classList.remove('is-open');
@@ -1671,21 +1635,20 @@ class MusicalGrid {
             document.body.classList.remove('more-sheet-open');
             returnSectionsToMain();
         };
+        // Expose for the button's inline onclick fallback in index.html.
+        this._openMoreSheet = open;
+        this._closeMoreSheet = close;
 
         // Re-entrancy guard so click + touchend + pointerup synthesis don't
         // open the sheet 3x for one tap.
         let lastOpenTs = 0;
         const handleToggleEvent = (e) => {
-            // Visible diagnostic — changes button label so screenshots can
-            // verify whether ANY event path is reaching JS.
-            toggle.textContent = `Tapped (${e.type})`;
             const now = performance.now();
             if (now - lastOpenTs < 300) {
                 if (e.type === 'touchend') e.preventDefault();
                 return;
             }
             lastOpenTs = now;
-            console.log('[more-sheet] toggle activated', e.type);
             if (e.type === 'touchend') e.preventDefault();
             open();
         };
