@@ -230,22 +230,47 @@ function updateAt<T>(arr: T[], idx: number, fn: (item: T) => T): T[] {
 }
 
 /**
- * Strip UI-only message shapes the server doesn't need. We keep tool_calls
- * on assistant messages (OpenAI requires them to bind subsequent tool
- * messages) and pass tool messages through verbatim.
+ * Strip UI-only fields and reshape our internal tool_call format into the
+ * shape OpenAI's Chat Completions API requires when replaying an assistant
+ * turn:
+ *
+ *   { id, type: "function", function: { name, arguments: <JSON string> } }
+ *
+ * Our internal shape is the flatter { id, name, arguments: object } that the
+ * server emits as SSE events. Without this reshape OpenAI returns
+ * `Missing required parameter: messages[N].tool_calls[0].type`.
  */
-function messagesForServer(history: ChatMessage[]): ChatMessage[] {
-  return history.map((m) => {
+type OpenAIToolCall = {
+  id: string;
+  type: 'function';
+  function: { name: string; arguments: string };
+};
+type ServerMessage =
+  | { role: 'user' | 'system'; content: string }
+  | { role: 'assistant'; content: string; tool_calls?: OpenAIToolCall[] }
+  | { role: 'tool'; content: string; tool_call_id?: string };
+
+function messagesForServer(history: ChatMessage[]): ServerMessage[] {
+  return history.map((m): ServerMessage => {
     if (m.role === 'assistant') {
-      const out: ChatMessage = { role: 'assistant', content: m.content };
-      if (m.tool_calls && m.tool_calls.length > 0) out.tool_calls = m.tool_calls;
+      const out: ServerMessage = { role: 'assistant', content: m.content };
+      if (m.tool_calls && m.tool_calls.length > 0) {
+        out.tool_calls = m.tool_calls.map((tc) => ({
+          id: tc.id,
+          type: 'function' as const,
+          function: {
+            name: tc.name,
+            arguments: JSON.stringify(tc.arguments ?? {}),
+          },
+        }));
+      }
       return out;
     }
     if (m.role === 'tool') {
-      const out: ChatMessage = { role: 'tool', content: m.content };
+      const out: ServerMessage = { role: 'tool', content: m.content };
       if (m.tool_call_id) out.tool_call_id = m.tool_call_id;
       return out;
     }
-    return { role: m.role, content: m.content };
+    return { role: m.role as 'user' | 'system', content: m.content };
   });
 }

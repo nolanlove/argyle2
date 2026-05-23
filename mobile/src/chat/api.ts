@@ -12,10 +12,18 @@
  * (No multi-line data, no `id:`, no `retry:` — keeps the parser tiny.)
  */
 
-import type { ChatMessage, ChatStreamEvent, ToolCall } from './types';
+import type { ChatStreamEvent, ToolCall } from './types';
+
+/**
+ * Wire shape for messages POSTed to the chat endpoint. Loose by design — the
+ * caller (ChatProvider.messagesForServer) is responsible for reshaping our
+ * internal `ChatMessage` into something OpenAI's API accepts (notably the
+ * nested `tool_calls[].function.{name,arguments:string}` shape).
+ */
+export type WireMessage = Record<string, unknown>;
 
 export interface StreamChatOpts {
-  messages: ChatMessage[];
+  messages: WireMessage[];
   /** AbortController signal for cancelling mid-stream. */
   signal?: AbortSignal;
   /** Optional override (defaults to `/api/mobile/chat/`). */
