@@ -1659,11 +1659,18 @@ class MusicalGrid {
         // path that the wrapper's gesture handler might trigger.
         toggle.addEventListener('pointerup', handleToggleEvent);
 
-        // Headless test hook — `?moretest=1` opens the sheet on load so
-        // automated screenshots can verify the open path without needing
-        // to drive the cursor.
-        if (new URLSearchParams(window.location.search).get('moretest') === '1') {
+        // Headless test hook — `?moretest=1` opens the sheet via the
+        // direct open() function. `?moretest=click` programmatically taps
+        // the More button so we can verify whether the *handler* path
+        // works independent of the user's real tap path.
+        const moretest = new URLSearchParams(window.location.search).get('moretest');
+        if (moretest === '1') {
             setTimeout(open, 300);
+        } else if (moretest === 'click') {
+            setTimeout(() => {
+                const btn = document.getElementById('moreSheetToggle');
+                if (btn) btn.click();
+            }, 400);
         }
         closeBtn.addEventListener('click', close);
         backdrop.addEventListener('click', close);
