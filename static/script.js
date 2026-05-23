@@ -1669,6 +1669,20 @@ class MusicalGrid {
         // direct open() function. `?moretest=click` programmatically taps
         // the More button so we can verify whether the *handler* path
         // works independent of the user's real tap path.
+        // `?showmore=1` overlays a bright red outline around the More
+        // button so simulator screenshots can visually verify where it
+        // actually sits on screen.
+        if (new URLSearchParams(window.location.search).get('showmore') === '1') {
+            setTimeout(() => {
+                const btn = document.getElementById('moreSheetToggle');
+                if (btn) {
+                    btn.style.outline = '4px solid red';
+                    btn.style.outlineOffset = '-2px';
+                    btn.style.background = 'rgba(255, 0, 0, 0.4)';
+                }
+            }, 300);
+        }
+
         const moretest = new URLSearchParams(window.location.search).get('moretest');
         if (moretest === '1') {
             setTimeout(open, 300);
