@@ -1360,7 +1360,13 @@ class MusicalGrid {
     // overlays have pointer-events:auto for click handling, so touch events
     // start there and bubble up through grid-container to the wrapper.
     setupGridGestures() {
-        const wrapper = document.querySelector('.grid-wrapper');
+        // Attach to .grid-canvas (where the grid cells live), not the
+        // whole .grid-wrapper — when the listener was on the wrapper with
+        // passive:false, iOS Safari apparently treated touches on
+        // sibling buttons (like the bottom-bar More button) as part of an
+        // "active" touch sequence and suppressed click synthesis. Moving
+        // it to the canvas keeps button taps untouched by the gesture path.
+        const wrapper = document.querySelector('.grid-canvas');
         if (!wrapper || wrapper.dataset.gesturesWired === '1') return;
         wrapper.dataset.gesturesWired = '1';
 

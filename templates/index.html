@@ -150,7 +150,9 @@
                          Inline onclick is a brute-force fallback so the
                          sheet opens even if the JS-attached listeners get
                          tangled with the wrapper's touch handler. -->
-                    <button class="btn btn-secondary info-more" id="moreSheetToggle" aria-label="More options" onclick="window.openArgyleMoreSheet && window.openArgyleMoreSheet();">More</button>
+                    <button class="btn btn-secondary info-more" id="moreSheetToggle" aria-label="More options"
+                            onclick="window.openArgyleMoreSheet && window.openArgyleMoreSheet();"
+                            ontouchend="event.preventDefault(); window.openArgyleMoreSheet && window.openArgyleMoreSheet();">More</button>
                 </div>
                 <div class="grid-canvas">
                     <div id="grid-container"></div>
