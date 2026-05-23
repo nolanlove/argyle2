@@ -39,6 +39,9 @@ interface ChatContextValue {
   /** Last error message, if any. Cleared on next send. */
   error: string | null;
   send(text: string): void;
+  /** Re-execute a previously-emitted tool call locally — no AI round-trip.
+   *  Lets the UI surface a "play again" button on past tool chips. */
+  replay(call: ToolCall): Promise<void>;
   /** Inline-rendered chip log of executed tool calls for the UI. */
   toolLog: ExecutedTool[];
 }
@@ -185,6 +188,7 @@ export function ChatProvider(props: { children: ReactNode }) {
             role: 'tool',
             tool_call_id: call.id,
             content: result.ok ? result.summary : `error: ${result.error}`,
+            tool_call: call,
           };
           setMessages((prev) => [...prev, toolMsg]);
           history = [...history, toolMsg];
@@ -209,9 +213,18 @@ export function ChatProvider(props: { children: ReactNode }) {
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
+  const replay = useCallback(async (call: ToolCall): Promise<void> => {
+    const inst = instrumentRef.current;
+    if (!inst) return;
+    // We deliberately do NOT append the result back to chat history —
+    // replay is a UI affordance, not a new conversational turn. The
+    // audit panel (long-press ♪) is the record of what played.
+    await executeToolCall(inst, call);
+  }, []);
+
   const value = useMemo<ChatContextValue>(() => ({
-    messages, busy, error, send, toolLog,
-  }), [messages, busy, error, send, toolLog]);
+    messages, busy, error, send, replay, toolLog,
+  }), [messages, busy, error, send, replay, toolLog]);
 
   return <ChatContext.Provider value={value}>{props.children}</ChatContext.Provider>;
 }

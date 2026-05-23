@@ -31,6 +31,10 @@ export interface ChatMessage {
   tool_calls?: ToolCall[];
   /** Set on role='tool' messages to bind the result to its call. */
   tool_call_id?: string;
+  /** UI-only: the original tool call that produced this result. Stored on
+   *  role='tool' messages so the chat panel can re-execute it on demand
+   *  without involving the AI. Stripped before sending to the server. */
+  tool_call?: ToolCall;
 }
 
 /** Discriminated union of events streamed from the server over SSE. */

@@ -18,7 +18,7 @@ const SUGGESTIONS = [
 ];
 
 export function ChatPanel() {
-  const { messages, busy, error, send } = useChat();
+  const { messages, busy, error, send, replay } = useChat();
 
   // First-visit auto-expand. After that, respect the user's last choice.
   const [expanded, setExpanded] = useState<boolean>(() => {
@@ -82,7 +82,7 @@ export function ChatPanel() {
         <>
           <div className="chat-messages" ref={listRef}>
             {messages.map((m, i) => (
-              <Bubble key={i} msg={m} />
+              <Bubble key={i} msg={m} onReplay={replay} />
             ))}
             {busy && <div className="chat-typing"><span/><span/><span/></div>}
             {error && <div className="chat-error">{error}</div>}
@@ -132,12 +132,28 @@ export function ChatPanel() {
   );
 }
 
-function Bubble({ msg }: { msg: ChatMessage }) {
+import type { ToolCall } from './types';
+function Bubble({ msg, onReplay }: { msg: ChatMessage; onReplay: (c: ToolCall) => Promise<void> }) {
   if (msg.role === 'tool') {
-    const label = msg.content.startsWith('error:')
-      ? `⚠ ${msg.content}`
-      : `▶ ${msg.content}`;
-    return <div className="chat-tool-chip">{label}</div>;
+    const isErr = msg.content.startsWith('error:');
+    const call = msg.tool_call;
+    const replayable = !isErr && !!call && isReplayable(call);
+    return (
+      <div className={`chat-tool-chip${replayable ? ' chat-tool-chip-replayable' : ''}`}>
+        {replayable ? (
+          <button
+            type="button"
+            className="chat-tool-chip-play"
+            onClick={() => { void onReplay(call); }}
+            aria-label={`Replay: ${msg.content}`}
+            title="Tap to replay"
+          >▶</button>
+        ) : (
+          <span aria-hidden>{isErr ? '⚠' : '▶'}</span>
+        )}
+        <span className="chat-tool-chip-label">{msg.content}</span>
+      </div>
+    );
   }
   if (msg.role === 'system') return null;
   const cls = msg.role === 'user' ? 'chat-bubble chat-bubble-user' : 'chat-bubble chat-bubble-assistant';
@@ -145,5 +161,18 @@ function Bubble({ msg }: { msg: ChatMessage }) {
     <div className={cls}>
       {msg.content || (msg.tool_calls && msg.tool_calls.length > 0 ? '…' : '')}
     </div>
+  );
+}
+
+/** Only audio-producing tools are worth replaying. */
+function isReplayable(call: ToolCall): boolean {
+  return (
+    call.name === 'play_chord' ||
+    call.name === 'play_note' ||
+    call.name === 'play_progression' ||
+    call.name === 'play_pattern_from_pitches' ||
+    call.name === 'play_progression_from_pitches' ||
+    call.name === 'set_key' ||
+    call.name === 'highlight_cells'
   );
 }
