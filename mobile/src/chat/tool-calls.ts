@@ -16,11 +16,33 @@ import type { KeyMode } from '../core';
 import { getAllCloneCoordsForPitch, keys } from '../core';
 import type { CellCoord, ToolCall, ToolExecResult } from './types';
 
+// Lazy-load the audio singleton so importing this module in Node tests
+// doesn't transitively pull in Tone.js (which needs Web Audio APIs).
+let _audio: typeof import('../audio/engine').audio | null = null;
+async function getAudio() {
+  if (_audio) return _audio;
+  const mod = await import('../audio/engine');
+  _audio = mod.audio;
+  return _audio;
+}
+
 // The grid dimensions are fixed at the mount site (Grid.tsx). Keep these in
 // sync — if they ever become dynamic, plumb through from there.
 const GRID_WIDTH = 20;
 const GRID_HEIGHT = 20;
 const ORIGIN_PITCH = 0;
+
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
+function midiToLabel(midi: number): string {
+  const pc = ((midi % 12) + 12) % 12;
+  const octave = Math.floor(midi / 12) - 1;
+  return `${NOTE_NAMES[pc]}${octave}`;
+}
+function pitchListLabel(pitches: readonly number[]): string {
+  if (pitches.length === 0) return '∅';
+  if (pitches.length > 5) return `${pitches.length} notes`;
+  return pitches.map(midiToLabel).join('-');
+}
 
 /** Subset of ArgyleInstrument the dispatcher actually calls. */
 export interface ToolTargetInstrument {
@@ -152,28 +174,37 @@ export async function executeToolCall(
           return first ? { x: first.x, y: first.y } : null;
         };
 
+        // CRITICAL: we audio.playChord/playNote the AI's EXACT pitches.
+        // The cell coords are only for visual highlight. Going through
+        // instrument.playChord(cells) would round-trip MIDI → cell → MIDI
+        // via getPitchAt() and the grid math is NOT a perfect inverse —
+        // pitches that don't decompose cleanly come back wrong octave or
+        // semitone (the porter flagged this in core/grid-coords). So we
+        // bypass the cell layer for audio and only use it for highlight.
+        const audio = await getAudio();
         if (voicing === 'block') {
           const cells: CellCoord[] = [];
           for (const p of pitches) {
             const c = cellsForPitch(p);
             if (c) cells.push(c);
           }
-          if (cells.length === 0) return fail('no pitches resolved to grid cells');
-          await instrument.playChord(cells, duration);
-          return { ok: true, summary: `played block voicing of ${cells.length} note(s)` };
+          if (cells.length > 0) instrument.highlight(cells, { durationMs: duration });
+          audio.playChord(pitches, duration);
+          await new Promise<void>((r) => setTimeout(r, duration));
+          instrument.clearHighlight();
+          return { ok: true, summary: `played block chord ${pitchListLabel(pitches)}` };
         }
         const ordered = voicing === 'arpeggio_up'
           ? [...pitches].sort((a, b) => a - b)
           : [...pitches].sort((a, b) => b - a);
-        const steps: ProgressionStep[] = [];
         for (const p of ordered) {
           const c = cellsForPitch(p);
-          if (!c) continue;
-          steps.push({ cells: [c], durationMs: stepMs });
+          if (c) instrument.highlight([c], { durationMs: stepMs });
+          audio.playNote(p, stepMs);
+          await new Promise<void>((r) => setTimeout(r, stepMs));
+          instrument.clearHighlight();
         }
-        if (steps.length === 0) return fail('no pitches resolved to grid cells');
-        await instrument.playProgression(steps);
-        return { ok: true, summary: `played ${voicing} arpeggio (${steps.length} note(s))` };
+        return { ok: true, summary: `played ${voicing} ${ordered.length} note(s)` };
       }
       default:
         return fail(`unknown tool: ${call.name}`);

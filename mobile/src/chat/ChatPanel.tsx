@@ -41,12 +41,18 @@ export function ChatPanel() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, expanded, busy]);
 
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const text = input;
     if (!text.trim() || busy) return;
     setInput('');
     send(text);
+    // Keep the keyboard up + the input focused so the user can fire off
+    // multiple prompts without re-tapping. iOS blurs the input on form
+    // submit otherwise.
+    inputRef.current?.focus();
   };
 
   const onSuggest = (text: string) => {
@@ -97,12 +103,21 @@ export function ChatPanel() {
 
           <form className="chat-input-row" onSubmit={onSubmit}>
             <input
+              ref={inputRef}
               className="chat-input"
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask Argyle to play something…"
               disabled={busy}
+              autoCapitalize="sentences"
+              autoCorrect="on"
+              autoComplete="off"
+              spellCheck
+              enterKeyHint="send"
+              inputMode="text"
+              /* iOS Safari zooms when input font-size < 16px on focus;
+                 keep at 16px to suppress that zoom in CSS. */
             />
             <button
               className="chat-send"

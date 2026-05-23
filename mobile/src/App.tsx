@@ -64,6 +64,22 @@ export function App() {
       const root = document.documentElement;
       root.style.setProperty('--argyle-pad-top', `${Math.max(vTop, 0)}px`);
       root.style.setProperty('--argyle-pad-bot', `${vBot}px`);
+      // Visual viewport height — used by .chat-panel-open so it shrinks
+      // when the iOS keyboard pops up (vh-based heights don't react to
+      // the keyboard intrusion).
+      root.style.setProperty('--argyle-vp-h', `${vH}px`);
+
+      // Compute where the chat panel's TOP edge should be.
+      // - No keyboard: ~35% down so the grid is the hero, chat panel
+      //   takes the bottom ~65% (~480px of 740px visible).
+      // - Keyboard up: just below the top URL bar / notch + a small gap,
+      //   so as much of the chat history as possible stays visible while
+      //   the user is typing.
+      const kbUp = vBot > 100;
+      const chatTop = kbUp
+        ? Math.max(vTop + 56, 60)
+        : Math.round(vTop + vH * 0.40);
+      root.style.setProperty('--argyle-chat-top', `${chatTop}px`);
     };
     apply();
     window.addEventListener('resize', apply);

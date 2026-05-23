@@ -197,9 +197,18 @@ html, body, #root {
   height: 52px;
 }
 .chat-panel-open {
-  /* Lean default — leaves room for the grid to remain the hero. User can
-     drag the chat panel handle or scroll the message list if they want more. */
-  height: 45vh;
+  /* Anchor the TOP of the panel as well as the bottom — that way the
+     panel stretches to fill all the visible viewport between the top
+     anchor and (var(--argyle-pad-bot) above) the keyboard, with zero
+     dead space below the input row.
+
+     Top is set in JS via --argyle-chat-top to leave roughly the upper
+     35% of the visible viewport for the grid (when no keyboard) and
+     collapses to just below the top safe area when the keyboard is up
+     (so messages stay readable while typing). */
+  top: var(--argyle-chat-top, 35vh);
+  height: auto;        /* derived from top + bottom anchors */
+  min-height: 0;
 }
 
 .chat-handle {
@@ -340,10 +349,13 @@ html, body, #root {
   background: #0f172a;
   color: #f1f5f9;
   font: inherit;
-  font-size: 0.9rem;
-  padding: 8px 12px;
+  /* 16px minimum to suppress iOS Safari's auto-zoom on focus. */
+  font-size: 16px;
+  padding: 12px 16px;
   border-radius: 999px;
   outline: none;
+  /* Larger tap target — at least 44pt. */
+  min-height: 44px;
 }
 .chat-input:focus {
   border-color: #3b82f6;
