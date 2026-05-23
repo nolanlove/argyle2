@@ -189,7 +189,7 @@ export async function executeToolCall(
             if (c) cells.push(c);
           }
           if (cells.length > 0) instrument.highlight(cells, { durationMs: duration });
-          audio.playChord(pitches, duration);
+          audio.tag('ai-chord').playChord(pitches, duration);
           await new Promise<void>((r) => setTimeout(r, duration));
           instrument.clearHighlight();
           return { ok: true, summary: `played block chord ${pitchListLabel(pitches)}` };
@@ -200,7 +200,7 @@ export async function executeToolCall(
         for (const p of ordered) {
           const c = cellsForPitch(p);
           if (c) instrument.highlight([c], { durationMs: stepMs });
-          audio.playNote(p, stepMs);
+          audio.tag('ai-arp').playNote(p, stepMs);
           await new Promise<void>((r) => setTimeout(r, stepMs));
           instrument.clearHighlight();
         }

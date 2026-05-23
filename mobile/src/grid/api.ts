@@ -210,7 +210,7 @@ export function createInstrument(opts: CreateInstrumentOpts): ArgyleInstrument {
     if (pitches.length === 0) return;
     const cellsSnap = builderCells.map((c) => ({ x: c.x, y: c.y }));
     renderer.highlightCells(cellsSnap, { durationMs });
-    audio.playChord(pitches, durationMs);
+    audio.tag('builder').playChord(pitches, durationMs);
     await sleep(durationMs);
   }
 
@@ -311,7 +311,7 @@ export function createInstrument(opts: CreateInstrumentOpts): ArgyleInstrument {
     const pitches = pitchesFor(cells);
     if (pitches.length === 0) return;
     renderer.highlightCells(cells, { durationMs });
-    audio.playChord(pitches, durationMs);
+    audio.tag('cells-chord').playChord(pitches, durationMs);
     await sleep(durationMs);
   }
 
@@ -322,7 +322,7 @@ export function createInstrument(opts: CreateInstrumentOpts): ArgyleInstrument {
     const info = getPitchAt(cell.x, cell.y, originPitch);
     if (!info) return;
     renderer.highlightCells([cell], { durationMs });
-    audio.playNote(info.pitch, durationMs);
+    audio.tag('cells-note').playNote(info.pitch, durationMs);
     await sleep(durationMs);
   }
 
@@ -337,7 +337,7 @@ export function createInstrument(opts: CreateInstrumentOpts): ArgyleInstrument {
         continue;
       }
       renderer.highlightCells(step.cells, { durationMs: step.durationMs });
-      audio.playChord(pitches, step.durationMs);
+      audio.tag('progression').playChord(pitches, step.durationMs);
       await sleep(step.durationMs);
       if (myToken !== progressionToken) return;
       renderer.clearHighlights();
@@ -366,7 +366,7 @@ export function createInstrument(opts: CreateInstrumentOpts): ArgyleInstrument {
   function handleUserHit(hit: HitCell): void {
     const cell: GridCoord = { x: hit.gx, y: hit.gy };
     if (playMode === 'notes') {
-      audio.playNote(hit.pitch);
+      audio.tag('user-tap').playNote(hit.pitch);
       emitUserPlay([cell]);
       return;
     }
@@ -378,7 +378,7 @@ export function createInstrument(opts: CreateInstrumentOpts): ArgyleInstrument {
     if (playMode === 'auto-chord') {
       const pitches = autoChordPitches(cell);
       if (pitches.length > 0) {
-        audio.playChord(pitches, DEFAULT_CHORD_DURATION);
+        audio.tag('auto-chord').playChord(pitches, DEFAULT_CHORD_DURATION);
         // Highlight just the root cell; resolving chord-cell coords across
         // clones is out of scope for this pass.
         renderer.highlightCells([cell], { durationMs: DEFAULT_CHORD_DURATION });

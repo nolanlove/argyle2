@@ -19,6 +19,7 @@ import { Grid } from './grid/Grid';
 import type { GridHandle } from './grid/Grid';
 import type { PlayMode } from './grid/api';
 import { audio } from './audio/engine';
+import { AuditPanel } from './audio/AuditPanel';
 import { TeacherMode } from './modes/TeacherMode';
 import { SongwriterMode } from './modes/SongwriterMode';
 import { LabMode } from './modes/LabMode';
@@ -28,6 +29,8 @@ export function App() {
   const [audioReady, setAudioReady] = useState(false);
   const [mode, setModeState] = useState<AppMode>(() => loadMode());
   const [playMode, setPlayMode] = useState<PlayMode>('notes');
+  const [auditOpen, setAuditOpen] = useState(false);
+  const longPressTimer = useRef<number | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<GridHandle | null>(null);
 
@@ -154,18 +157,42 @@ export function App() {
           the user can confirm output even before any AI/chord flow runs. */}
       <button
         className={`sound-check ${audioReady ? 'sound-check-ready' : ''}`}
-        aria-label="Test sound"
+        aria-label="Test sound (long-press for audit panel)"
         onClick={() => {
+          // Skip the play if this click is the end of a long-press.
+          if (longPressTimer.current === -1) {
+            longPressTimer.current = null;
+            return;
+          }
           audio.init();
-          // Defer the test tone one tick so Tone.start() promise lands.
           setTimeout(() => {
-            audio.playNote(72, 400);
+            audio.tag('test').playNote(72, 400);
             if (audio.isReady()) setAudioReady(true);
           }, 50);
+        }}
+        onPointerDown={() => {
+          longPressTimer.current = window.setTimeout(() => {
+            longPressTimer.current = -1; // signal: ignore the upcoming click
+            setAuditOpen((v) => !v);
+          }, 500);
+        }}
+        onPointerUp={() => {
+          if (longPressTimer.current && longPressTimer.current > 0) {
+            clearTimeout(longPressTimer.current);
+            longPressTimer.current = null;
+          }
+        }}
+        onPointerCancel={() => {
+          if (longPressTimer.current && longPressTimer.current > 0) {
+            clearTimeout(longPressTimer.current);
+          }
+          longPressTimer.current = null;
         }}
       >
         ♪
       </button>
+
+      <AuditPanel open={auditOpen} onClose={() => setAuditOpen(false)} />
 
       {!audioReady && (
         <div className="audio-hint" aria-hidden>

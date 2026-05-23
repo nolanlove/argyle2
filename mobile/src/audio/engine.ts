@@ -37,6 +37,31 @@ type Playable = {
   ): unknown;
 };
 
+/** One audio event — what was actually sent to the audio backend. */
+export interface AuditEvent {
+  /** Local epoch ms when the play was issued. */
+  t: number;
+  /** Source label — 'user-tap', 'ai-chord', 'ai-note', 'test', etc. */
+  source: string;
+  /** MIDI pitches passed to playNote/playChord. */
+  midi: number[];
+  /** Frequencies in Hz that were ACTUALLY sent to Tone.js. */
+  freq: number[];
+  /** Note names for human readability ("C4", "E4", "G4"). */
+  names: string[];
+  /** Duration sent to the sampler/synth (ms). */
+  durationMs: number;
+  /** Which instrument played: 'piano' (sampler) or 'synth' (PolySynth). */
+  instrument: 'piano' | 'synth';
+}
+
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
+function midiName(midi: number): string {
+  const pc = ((midi % 12) + 12) % 12;
+  const octave = Math.floor(midi / 12) - 1;
+  return `${NOTE_NAMES[pc]}${octave}`;
+}
+
 export class AudioEngine {
   private synth: Tone.PolySynth | null = null;
   private piano: Tone.Sampler | null = null;
@@ -44,6 +69,46 @@ export class AudioEngine {
   private pianoLoading = false;
   /** Tone.start() promise; resolves when the AudioContext is running. */
   private startPromise: Promise<void> | null = null;
+
+  /** Ring buffer of recent audio events for the audit panel. */
+  private readonly _audit: AuditEvent[] = [];
+  private readonly _auditMax = 50;
+  private readonly _auditListeners = new Set<(e: AuditEvent) => void>();
+  /** Default source label for the next play* call — set by callers. */
+  private _nextSource = 'unknown';
+
+  /** Set the source label for the NEXT play call. Resets after one use. */
+  tag(source: string): this { this._nextSource = source; return this; }
+
+  /** Read the audit log (most recent last). */
+  audit(): readonly AuditEvent[] { return this._audit; }
+
+  /** Subscribe to audit events. Returns unsubscribe. */
+  onPlay(cb: (e: AuditEvent) => void): () => void {
+    this._auditListeners.add(cb);
+    return () => { this._auditListeners.delete(cb); };
+  }
+
+  private logPlay(midi: number[], durationMs: number): void {
+    const freq = midi.map((m) => Tone.Frequency(m, 'midi').toFrequency());
+    const names = midi.map(midiName);
+    const inst: 'piano' | 'synth' = this.piano ? 'piano' : 'synth';
+    const e: AuditEvent = {
+      t: Date.now(),
+      source: this._nextSource,
+      midi: [...midi],
+      freq,
+      names,
+      durationMs,
+      instrument: inst,
+    };
+    this._nextSource = 'unknown';
+    this._audit.push(e);
+    if (this._audit.length > this._auditMax) this._audit.shift();
+    for (const cb of this._auditListeners) {
+      try { cb(e); } catch { /* swallow */ }
+    }
+  }
 
   /**
    * Unlock the audio context and build the synth.
@@ -132,6 +197,7 @@ export class AudioEngine {
     if (!inst) return;
     const freq = Tone.Frequency(midi, 'midi').toFrequency();
     inst.triggerAttackRelease(freq, durationMs / 1000);
+    this.logPlay([midi], durationMs);
   }
 
   /** Play multiple MIDI notes simultaneously. */
@@ -140,6 +206,7 @@ export class AudioEngine {
     if (!inst || midis.length === 0) return;
     const freqs = midis.map((m) => Tone.Frequency(m, 'midi').toFrequency());
     inst.triggerAttackRelease(freqs, durationMs / 1000);
+    this.logPlay([...midis], durationMs);
   }
 
   /** Cut all sustaining voices. */
