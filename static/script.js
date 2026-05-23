@@ -1669,9 +1669,8 @@ class MusicalGrid {
         // direct open() function. `?moretest=click` programmatically taps
         // the More button so we can verify whether the *handler* path
         // works independent of the user's real tap path.
-        // `?showmore=1` overlays a bright red outline around the More
-        // button so simulator screenshots can visually verify where it
-        // actually sits on screen.
+        // `?showmore=1` outlines More red AND adds a top-of-screen log
+        // showing every click's (x,y) and target element.
         if (new URLSearchParams(window.location.search).get('showmore') === '1') {
             setTimeout(() => {
                 const btn = document.getElementById('moreSheetToggle');
@@ -1680,6 +1679,23 @@ class MusicalGrid {
                     btn.style.outlineOffset = '-2px';
                     btn.style.background = 'rgba(255, 0, 0, 0.4)';
                 }
+                const log = document.createElement('div');
+                log.id = 'click-log';
+                log.style.cssText =
+                    'position:fixed;top:0;left:0;right:0;z-index:99999;' +
+                    'background:rgba(0,0,0,0.85);color:#0f0;' +
+                    'font:11px/1.3 ui-monospace,monospace;' +
+                    'padding:4px 6px;pointer-events:none;white-space:pre;';
+                log.textContent = 'click log: idle';
+                document.body.appendChild(log);
+                document.addEventListener('click', (e) => {
+                    const t = e.target;
+                    const tag = t.tagName.toLowerCase();
+                    const desc = '<' + tag + '>' +
+                        (t.id ? '#' + t.id : '') +
+                        (t.className ? '.' + String(t.className).split(' ')[0] : '');
+                    log.textContent = `click @ ${Math.round(e.clientX)},${Math.round(e.clientY)} → ${desc}`;
+                }, true);
             }, 300);
         }
 
