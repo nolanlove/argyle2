@@ -258,7 +258,12 @@
      * Get the default pitch at the grid origin (0,0)
      */
     function getOriginPitch() {
-        return 36; // C2
+        // Rectangle-grid branch: lowered from 36 (C2) to 0 (C-1) so the
+        // 20×20 underlying grid's high corner cells (e.g. (19, 12) →
+        // pitch 4·19 + 3·12 = 112) stay within MIDI 0-127. The visible
+        // rectangle's center cell at grid (10, 10) lands at pitch 70 (B♭4),
+        // close to the original 8×8 center pitch of 64 (E4).
+        return 0;
     }
 
     /**

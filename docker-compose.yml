@@ -1,0 +1,25 @@
+# Local development services.
+# Run:  docker compose up -d
+# Then point Django at it via .env: DATABASE_URL=postgres://argyle:argyle@localhost:5432/argyle
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: argyle_pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: argyle
+      POSTGRES_PASSWORD: argyle
+      POSTGRES_DB: argyle
+    ports:
+      - "5432:5432"
+    volumes:
+      - argyle_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U argyle -d argyle"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  argyle_pg_data:

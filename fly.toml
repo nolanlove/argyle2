@@ -1,0 +1,47 @@
+# Fly.io app configuration.
+# Set secrets with: fly secrets set KEY=value
+
+app = "argyletheory"
+primary_region = "iad"
+
+[build]
+
+# Run migrations on every deploy, before new VMs take traffic.
+[deploy]
+  release_command = "python manage.py migrate --noinput"
+
+[env]
+  PORT = "8080"
+  DJANGO_SETTINGS_MODULE = "argyle.settings"
+  ALLOWED_HOSTS = "argyletheory.fly.dev,argyletheory.com,www.argyletheory.com"
+  CSRF_TRUSTED_ORIGINS = "https://argyletheory.fly.dev,https://argyletheory.com,https://www.argyletheory.com"
+  CORS_ALLOWED_ORIGINS = "https://argyletheory.com,https://www.argyletheory.com"
+  # Fly's edge proxy handles HTTP->HTTPS via http_service.force_https, so Django
+  # doesn't need to. Leaving Django's redirect on would 301 the internal Consul
+  # health check (which speaks plain HTTP) and fail readiness.
+  SECURE_SSL_REDIRECT = "False"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 200
+    hard_limit = 250
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/api/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+  cpus = 1

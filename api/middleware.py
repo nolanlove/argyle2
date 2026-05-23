@@ -18,3 +18,5 @@ class DisableCSRFForAPI(MiddlewareMixin):
             return csrf_exempt(view_func)(request, *view_args, **view_kwargs)
         return None
 
+
+

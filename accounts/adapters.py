@@ -17,3 +17,5 @@ class CustomAccountAdapter(DefaultAccountAdapter):
         # Default behavior - redirect to home
         return super().get_login_redirect_url(request)
 
+
+

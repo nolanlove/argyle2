@@ -53,26 +53,77 @@ class AuthUI {
         </div>
       `;
     } else {
-      // User is not logged in
+      // User is not logged in — round person icon opens a centered modal
+      // with Sign in / Create account tabs (two completely separate <form>s
+      // so the browser autofill behaves correctly per-pane).
       authContainer.innerHTML = `
-        <div class="auth-login">
-          <h3>Sign in to save your songs</h3>
-          <p>Create an account to save and share your musical creations</p>
-          <div class="auth-email-form">
-            <form id="email-auth-form">
-              <div class="form-group">
-                <label for="email">Email</label>
-                <input type="email" id="email" name="email" required>
+        <button type="button" id="auth-trigger" class="auth-icon-btn" aria-label="Sign in or create account" aria-expanded="false" aria-controls="auth-modal">
+          ${this.personIconSVG()}
+        </button>
+        <div class="auth-modal-backdrop" id="auth-modal-backdrop" hidden>
+          <div class="auth-modal" id="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
+            <button type="button" class="auth-popover-close" id="auth-popover-close" aria-label="Close">×</button>
+            <div class="auth-tabs" role="tablist">
+              <button type="button" class="auth-tab is-active" data-tab="signin" role="tab" aria-selected="true">Sign in</button>
+              <button type="button" class="auth-tab" data-tab="signup" role="tab" aria-selected="false">Create account</button>
+            </div>
+            <h3 id="auth-modal-title" class="visually-hidden">Account</h3>
+
+            <!-- SIGN IN -->
+            <section class="auth-pane" data-pane="signin">
+              <div class="auth-email-form">
+                <form id="signin-form" autocomplete="on" novalidate>
+                  <div class="form-group">
+                    <label for="signin-email">Email</label>
+                    <input type="email" id="signin-email" name="email"
+                           autocomplete="username"
+                           autocapitalize="off" autocorrect="off" spellcheck="false"
+                           required>
+                  </div>
+                  <div class="form-group">
+                    <label for="signin-password">Password</label>
+                    <input type="password" id="signin-password" name="password"
+                           autocomplete="current-password"
+                           required>
+                  </div>
+                  <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Sign in</button>
+                  </div>
+                </form>
               </div>
-              <div class="form-group">
-                <label for="password">Password</label>
-                <input type="password" id="password" name="password" required>
+            </section>
+
+            <!-- CREATE ACCOUNT -->
+            <section class="auth-pane" data-pane="signup" hidden>
+              <div class="auth-email-form">
+                <form id="signup-form" autocomplete="on" novalidate>
+                  <div class="form-group">
+                    <label for="signup-email">Email</label>
+                    <input type="email" id="signup-email" name="email"
+                           autocomplete="username"
+                           autocapitalize="off" autocorrect="off" spellcheck="false"
+                           required>
+                  </div>
+                  <div class="form-group">
+                    <label for="signup-password">Password</label>
+                    <input type="password" id="signup-password" name="new-password"
+                           autocomplete="new-password"
+                           minlength="8"
+                           required>
+                  </div>
+                  <div class="form-group">
+                    <label for="signup-password-confirm">Confirm password</label>
+                    <input type="password" id="signup-password-confirm" name="new-password-confirm"
+                           autocomplete="new-password"
+                           minlength="8"
+                           required>
+                  </div>
+                  <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Create account</button>
+                  </div>
+                </form>
               </div>
-              <div class="form-actions">
-                <button type="submit" class="btn btn-primary">Sign In</button>
-                <button type="button" id="signup-toggle" class="btn btn-secondary">Create Account</button>
-              </div>
-            </form>
+            </section>
           </div>
         </div>
       `;
@@ -81,27 +132,94 @@ class AuthUI {
     this.bindAuthEvents();
   }
 
-  bindAuthEvents() {
-    // Email form handling
-    const form = document.getElementById('email-auth-form');
-    const signupToggle = document.getElementById('signup-toggle');
-    
-    console.log('Binding auth events:', { form: !!form, signupToggle: !!signupToggle });
-    
-    if (form) {
-      form.addEventListener('submit', (e) => {
-        console.log('Form submitted');
-        e.preventDefault();
-        this.handleEmailAuth();
-      });
+  personIconSVG() {
+    return `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="8" r="4"></circle>
+        <path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"></path>
+      </svg>`;
+  }
+
+  setModalOpen(open) {
+    const trigger = document.getElementById('auth-trigger');
+    const backdrop = document.getElementById('auth-modal-backdrop');
+    if (!trigger || !backdrop) return;
+    if (open) {
+      backdrop.hidden = false;
+      document.body.classList.add('auth-modal-open');
+      trigger.setAttribute('aria-expanded', 'true');
+    } else {
+      backdrop.hidden = true;
+      document.body.classList.remove('auth-modal-open');
+      trigger.setAttribute('aria-expanded', 'false');
     }
-    
-    if (signupToggle) {
-      signupToggle.addEventListener('click', () => {
-        this.toggleSignupMode();
+  }
+
+  showPane(name) {
+    document.querySelectorAll('.auth-pane').forEach((el) => {
+      el.hidden = el.dataset.pane !== name;
+    });
+    document.querySelectorAll('.auth-tab').forEach((el) => {
+      const active = el.dataset.tab === name;
+      el.classList.toggle('is-active', active);
+      el.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    const visible = document.querySelector(`.auth-pane[data-pane="${name}"]`);
+    if (visible) {
+      const first = visible.querySelector('input');
+      if (first) setTimeout(() => first.focus(), 0);
+    }
+  }
+
+  bindAuthEvents() {
+    // Auth modal trigger (only present when logged out)
+    const trigger = document.getElementById('auth-trigger');
+    const backdrop = document.getElementById('auth-modal-backdrop');
+    const modal = document.getElementById('auth-modal');
+    const popoverClose = document.getElementById('auth-popover-close');
+
+    if (trigger && backdrop && modal) {
+      trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const opening = backdrop.hidden;
+        this.setModalOpen(opening);
+        if (opening) this.showPane('signin');
+      });
+
+      if (popoverClose) {
+        popoverClose.addEventListener('click', () => this.setModalOpen(false));
+      }
+
+      // Backdrop click to dismiss (but not clicks inside the modal card).
+      backdrop.addEventListener('click', (e) => {
+        if (e.target === backdrop) this.setModalOpen(false);
+      });
+
+      // Escape to dismiss.
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !backdrop.hidden) this.setModalOpen(false);
       });
     }
 
+    // Tabs
+    document.querySelectorAll('.auth-tab').forEach((tab) => {
+      tab.addEventListener('click', () => this.showPane(tab.dataset.tab));
+    });
+
+    const signinForm = document.getElementById('signin-form');
+    if (signinForm) {
+      signinForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        this.handleSignin();
+      });
+    }
+    const signupForm = document.getElementById('signup-form');
+    if (signupForm) {
+      signupForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        this.handleSignup();
+      });
+    }
 
     // User menu dropdown functionality
     const userMenuTrigger = document.getElementById('user-menu-trigger');
@@ -150,90 +268,87 @@ class AuthUI {
   }
 
 
-  toggleSignupMode() {
-    const form = document.getElementById('email-auth-form');
-    const submitBtn = form.querySelector('button[type="submit"]');
-    const toggleBtn = document.getElementById('signup-toggle');
-    
-    if (submitBtn.textContent === 'Sign In') {
-      // Switch to signup mode
-      submitBtn.textContent = 'Create Account';
-      toggleBtn.textContent = 'Sign In Instead';
-      form.dataset.mode = 'signup';
-    } else {
-      // Switch to signin mode
-      submitBtn.textContent = 'Sign In';
-      toggleBtn.textContent = 'Create Account';
-      form.dataset.mode = 'signin';
-    }
-  }
+  async handleSignin() {
+    const email = document.getElementById('signin-email').value.trim();
+    const password = document.getElementById('signin-password').value;
 
-  async handleEmailAuth() {
-    const email = document.getElementById('email').value;
-    const password = document.getElementById('password').value;
-    const form = document.getElementById('email-auth-form');
-    const isSignup = form.dataset.mode === 'signup';
-
-    // Clear any existing error messages
-    this.clearAuthError();
-
-    console.log('Auth attempt:', { email, isSignup, mode: form.dataset.mode });
+    this.clearAuthError('signin-form');
 
     try {
-      const endpoint = isSignup ? '/api/auth/signup' : '/api/auth/login';
-      console.log('Making request to:', endpoint);
-      
-      const response = await fetch(endpoint, {
+      const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',  // Include cookies in the request
-        body: JSON.stringify({ email, password })
+        credentials: 'include',
+        body: JSON.stringify({ email, password }),
       });
-
-      console.log('Response status:', response.status);
       const result = await response.json();
-      console.log('Response result:', result);
-
       if (response.ok && result.success) {
-        console.log('Auth successful, updating UI');
-        // Small delay to ensure cookie is set
-        await new Promise(resolve => setTimeout(resolve, 100));
+        document.body.classList.remove('auth-modal-open');
+        await new Promise((r) => setTimeout(r, 100));
         await this.checkAuthStatus();
         this.renderAuthUI();
       } else {
-        console.log('Auth failed:', result.error);
-        this.showAuthError(result.error || (isSignup ? 'Signup failed' : 'Invalid credentials'));
+        this.showAuthError(result.error || 'Invalid credentials', 'signin-form');
       }
     } catch (error) {
-      console.error('Email auth error:', error);
-      this.showAuthError('Authentication failed. Please try again.');
+      console.error('Signin error:', error);
+      this.showAuthError('Sign-in failed. Please try again.', 'signin-form');
     }
   }
 
-  showAuthError(message) {
-    const form = document.getElementById('email-auth-form');
+  async handleSignup() {
+    const email = document.getElementById('signup-email').value.trim();
+    const password = document.getElementById('signup-password').value;
+    const confirm = document.getElementById('signup-password-confirm').value;
+
+    this.clearAuthError('signup-form');
+
+    if (password.length < 8) {
+      this.showAuthError('Password must be at least 8 characters.', 'signup-form');
+      return;
+    }
+    if (password !== confirm) {
+      this.showAuthError("Passwords don't match.", 'signup-form');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email, password }),
+      });
+      const result = await response.json();
+      if (response.ok && result.success) {
+        document.body.classList.remove('auth-modal-open');
+        await new Promise((r) => setTimeout(r, 100));
+        await this.checkAuthStatus();
+        this.renderAuthUI();
+      } else {
+        this.showAuthError(result.error || 'Signup failed', 'signup-form');
+      }
+    } catch (error) {
+      console.error('Signup error:', error);
+      this.showAuthError('Signup failed. Please try again.', 'signup-form');
+    }
+  }
+
+  showAuthError(message, formId) {
+    const form = document.getElementById(formId);
     if (!form) return;
-
-    // Remove any existing error message
-    this.clearAuthError();
-
-    // Create error message element
+    this.clearAuthError(formId);
     const errorDiv = document.createElement('div');
     errorDiv.className = 'auth-error-message';
     errorDiv.textContent = message;
-
-    // Insert error message before the form actions
     const formActions = form.querySelector('.form-actions');
-    if (formActions) {
-      formActions.parentNode.insertBefore(errorDiv, formActions);
-    }
+    if (formActions) formActions.parentNode.insertBefore(errorDiv, formActions);
   }
 
-  clearAuthError() {
-    const existingError = document.querySelector('.auth-error-message');
-    if (existingError) {
-      existingError.remove();
-    }
+  clearAuthError(formId) {
+    const scope = formId ? document.getElementById(formId) : document;
+    if (!scope) return;
+    scope.querySelectorAll('.auth-error-message').forEach((el) => el.remove());
   }
 
 

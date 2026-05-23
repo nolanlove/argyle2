@@ -1,14 +1,17 @@
 /**
  * Thin Tone.js wrapper. Plain class, no React.
  *
- * `init()` must be called from a user gesture (touchstart/click) to unlock
- * the Web Audio context on iOS Safari. The singleton `audio` export is the
- * intended consumer surface.
+ * `init()` MUST be called synchronously from inside a user-gesture handler
+ * (touchstart/click) on iOS Safari. Critically, we create the synth in the
+ * SAME tick as Tone.start() — putting `new Tone.PolySynth()` after an
+ * `await` leaves the instrument bound to a context that iOS still treats
+ * as suspended even after Tone.start() resolves.
  *
- * Audio: starts immediately on a PolySynth so the first tap is never silent,
- * then upgrades to a Salamander Grand Piano Sampler in the background once
- * the samples load (~150KB across 5 keys). The swap is seamless because
- * playNote/playChord just route to whichever instrument is current.
+ * Audio: PolySynth (zero-asset boot) is created immediately so the very
+ * first tap produces sound. A Salamander Grand Piano sampler loads
+ * asynchronously in the background and is swapped in once buffers arrive.
+ * The sampler is fire-and-forget — it does NOT block init() resolution,
+ * so a slow/blocked CDN never strands the user with no audio.
  */
 
 import * as Tone from 'tone';
@@ -17,8 +20,7 @@ import type { Midi } from '../core';
 const DEFAULT_DURATION_MS = 600;
 const MAX_POLYPHONY = 16;
 
-// Subset of Salamander samples — Tone.js interpolates the gaps. CDN-hosted
-// by the Tone.js project; tiny set keeps boot fast.
+// Subset of Salamander samples — Tone.js interpolates the gaps.
 const SALAMANDER_URLS: Record<string, string> = {
   C2: 'C2.mp3',
   C3: 'C3.mp3',
@@ -33,60 +35,77 @@ type Playable = {
     notes: string | string[] | number | number[],
     duration: number | string,
   ): unknown;
-  releaseAll?(): unknown;
 };
 
 export class AudioEngine {
   private synth: Tone.PolySynth | null = null;
   private piano: Tone.Sampler | null = null;
   private started = false;
-  private starting: Promise<void> | null = null;
+  private pianoLoading = false;
+  /** Tone.start() promise; resolves when the AudioContext is running. */
+  private startPromise: Promise<void> | null = null;
 
   /**
-   * Unlock the audio context, build the fallback synth, and kick off async
-   * loading of the piano sampler. Idempotent.
-   * MUST be called from a user-gesture handler the first time, otherwise
-   * iOS Safari will keep the context suspended.
+   * Unlock the audio context and build the synth.
+   *
+   * MUST be called synchronously from a user-gesture event handler. Do NOT
+   * `await` anything before invoking it.
+   *
+   * Idempotent — subsequent calls return the same Promise.
    */
-  async init(): Promise<void> {
-    if (this.started) return;
-    if (this.starting) return this.starting;
-    this.starting = (async () => {
-      await Tone.start();
+  init(): Promise<void> {
+    if (this.started && this.startPromise) return this.startPromise;
 
-      // Immediate fallback: a soft triangle synth so the first tap makes
-      // sound even before piano samples finish downloading.
-      const synth = new Tone.PolySynth(Tone.Synth, {
-        oscillator: { type: 'triangle' },
-        envelope: { attack: 0.005, decay: 0.15, sustain: 0.3, release: 0.6 },
-      });
-      synth.maxPolyphony = MAX_POLYPHONY;
-      synth.volume.value = -10;
-      synth.toDestination();
-      this.synth = synth;
-      this.started = true;
+    // 1. Kick Tone.start() FIRST (synchronously, inside the gesture tick).
+    this.startPromise = Tone.start();
 
-      // Background upgrade to piano. If it fails (offline, blocked), we
-      // just stay on the synth — no breakage.
-      try {
-        const piano = new Tone.Sampler({
-          urls: SALAMANDER_URLS,
-          baseUrl: SALAMANDER_BASE,
-          release: 1,
-        });
-        piano.volume.value = -6;
-        piano.toDestination();
-        await Tone.loaded();
-        this.piano = piano;
-      } catch (e) {
-        // Stay on the synth; log but don't surface to UI.
-        console.warn('Piano samples failed to load; staying on synth', e);
-      }
-    })();
-    return this.starting;
+    // 2. Build the synth SYNCHRONOUSLY in the same tick. Tone.js binds it
+    // to the global context that we just told to start. By the time the
+    // user actually plays a note, the context will be running.
+    const synth = new Tone.PolySynth(Tone.Synth, {
+      oscillator: { type: 'triangle' },
+      envelope: { attack: 0.005, decay: 0.15, sustain: 0.3, release: 0.6 },
+    });
+    synth.maxPolyphony = MAX_POLYPHONY;
+    synth.volume.value = -6;
+    synth.toDestination();
+    this.synth = synth;
+    this.started = true;
+
+    // 3. Fire-and-forget piano upgrade. NOT awaited here so a slow/blocked
+    // CDN never strands the user without audio.
+    void this.loadPianoInBackground();
+
+    return this.startPromise;
   }
 
-  /** True once `init()` has resolved. Useful for first-tap gating. */
+  private async loadPianoInBackground(): Promise<void> {
+    if (this.pianoLoading || this.piano) return;
+    this.pianoLoading = true;
+    try {
+      const piano = new Tone.Sampler({
+        urls: SALAMANDER_URLS,
+        baseUrl: SALAMANDER_BASE,
+        release: 1,
+      });
+      piano.volume.value = -3;
+      piano.toDestination();
+      // Race with a 10s timeout so a hung CDN doesn't leak the loading flag.
+      await Promise.race([
+        Tone.loaded(),
+        new Promise<void>((_, rej) =>
+          setTimeout(() => rej(new Error('piano sample load timeout')), 10000),
+        ),
+      ]);
+      this.piano = piano;
+    } catch (e) {
+      console.warn('[argyle audio] piano load failed; staying on synth', e);
+    } finally {
+      this.pianoLoading = false;
+    }
+  }
+
+  /** True once `init()` has been called and the synth is constructed. */
   isReady(): boolean {
     return this.started && this.synth !== null;
   }
@@ -94,6 +113,13 @@ export class AudioEngine {
   /** True if the piano sampler is loaded and being used. */
   isPianoReady(): boolean {
     return this.piano !== null;
+  }
+
+  /** Diagnostic: returns the underlying AudioContext state. */
+  contextState(): 'suspended' | 'running' | 'closed' | 'uninitialized' {
+    if (!this.started) return 'uninitialized';
+    return Tone.getContext().rawContext.state as
+      | 'suspended' | 'running' | 'closed';
   }
 
   private current(): Playable | null {
@@ -119,9 +145,6 @@ export class AudioEngine {
   /** Cut all sustaining voices. */
   stopAll(): void {
     this.synth?.releaseAll();
-    // Tone.Sampler doesn't expose releaseAll; trigger a hard stop on the
-    // destination would cut everything but also the piano's natural decay
-    // tail. For now, let voices die naturally — durations are short anyway.
   }
 }
 

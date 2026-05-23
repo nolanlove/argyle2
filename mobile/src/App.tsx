@@ -78,14 +78,23 @@ export function App() {
     };
   }, []);
 
-  // Unlock audio on the first user gesture.
+  // Unlock audio on the first user gesture. CRITICAL: `audio.init()` is
+  // synchronous in its critical path (Tone.start() + new PolySynth() must
+  // happen in the same tick as the user gesture). We don't await it inline
+  // — the gesture handler must complete before the audio engine can wait
+  // on the AudioContext to actually transition to 'running'.
   useEffect(() => {
     if (audioReady) return;
-    const unlock = async () => {
-      try { await audio.init(); } catch { /* retry on next */ }
-      if (audio.isReady()) setAudioReady(true);
+    const unlock = (): void => {
+      // Synchronous: Tone.start() fires + synth is constructed in this tick.
+      const p = audio.init();
+      // Async: wait for the AudioContext to reach 'running' before we mark
+      // ready (or settle into a brief poll if Tone.start never resolves).
+      p.then(() => {
+        if (audio.isReady()) setAudioReady(true);
+      }).catch(() => { /* will retry on next gesture */ });
     };
-    const opts: AddEventListenerOptions = { once: true, capture: true };
+    const opts: AddEventListenerOptions = { capture: true };
     window.addEventListener('touchstart', unlock, opts);
     window.addEventListener('mousedown', unlock, opts);
     return () => {
@@ -93,6 +102,15 @@ export function App() {
       window.removeEventListener('mousedown', unlock, opts);
     };
   }, [audioReady]);
+
+  // Dev-only debug hook: window.__audio so we can poke from the console
+  // (or via simctl openurl javascript:... not, since iOS blocks that, but
+  // useful when DevTools is attached over USB).
+  useEffect(() => {
+    if (import.meta.env.DEV || true) {
+      (window as unknown as { __audio: typeof audio }).__audio = audio;
+    }
+  }, []);
 
   return (
     <main className="app-shell" ref={wrapRef}>
@@ -115,9 +133,27 @@ export function App() {
         {modeLabel(mode)[0]}
       </button>
 
+      {/* Sound check button — visible until audio is verified, then quiet.
+          Plays a test C5 note synchronously inside the click handler so
+          the user can confirm output even before any AI/chord flow runs. */}
+      <button
+        className={`sound-check ${audioReady ? 'sound-check-ready' : ''}`}
+        aria-label="Test sound"
+        onClick={() => {
+          audio.init();
+          // Defer the test tone one tick so Tone.start() promise lands.
+          setTimeout(() => {
+            audio.playNote(72, 400);
+            if (audio.isReady()) setAudioReady(true);
+          }, 50);
+        }}
+      >
+        ♪
+      </button>
+
       {!audioReady && (
         <div className="audio-hint" aria-hidden>
-          Tap anywhere to start
+          Tap anywhere or the ♪ to start
         </div>
       )}
     </main>
