@@ -1669,8 +1669,9 @@ class MusicalGrid {
         // direct open() function. `?moretest=click` programmatically taps
         // the More button so we can verify whether the *handler* path
         // works independent of the user's real tap path.
-        // `?showmore=1` outlines More red AND adds a top-of-screen log
-        // showing every click's (x,y) and target element.
+        // `?showmore=1` outlines More red, logs clicks, AND on load
+        // reports elementsFromPoint at the More button center — so we
+        // can see what's actually on top of it in the stacking order.
         if (new URLSearchParams(window.location.search).get('showmore') === '1') {
             setTimeout(() => {
                 const btn = document.getElementById('moreSheetToggle');
@@ -1684,9 +1685,22 @@ class MusicalGrid {
                 log.style.cssText =
                     'position:fixed;top:0;left:0;right:0;z-index:99999;' +
                     'background:rgba(0,0,0,0.85);color:#0f0;' +
-                    'font:11px/1.3 ui-monospace,monospace;' +
+                    'font:10px/1.2 ui-monospace,monospace;' +
                     'padding:4px 6px;pointer-events:none;white-space:pre;';
-                log.textContent = 'click log: idle';
+                if (btn) {
+                    const r = btn.getBoundingClientRect();
+                    const cx = r.left + r.width / 2;
+                    const cy = r.top + r.height / 2;
+                    const stack = document.elementsFromPoint(cx, cy)
+                        .slice(0, 4)
+                        .map(el => '<' + el.tagName.toLowerCase() + '>' +
+                            (el.id ? '#' + el.id : '') +
+                            (el.className ? '.' + String(el.className).split(' ')[0] : ''))
+                        .join(' / ');
+                    log.textContent = `More center (${Math.round(cx)},${Math.round(cy)}) stack: ${stack}`;
+                } else {
+                    log.textContent = 'no more button';
+                }
                 document.body.appendChild(log);
                 document.addEventListener('click', (e) => {
                     const t = e.target;
