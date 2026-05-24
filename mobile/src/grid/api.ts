@@ -13,6 +13,7 @@
 
 import type { GridRenderer, HitCell } from './renderer';
 import type { AudioEngine } from '../audio/engine';
+import { setLastPlay } from '../audio/last-play';
 import type { GridCoord, KeyMode } from '../core';
 import {
   getPitchAt,
@@ -221,6 +222,10 @@ export function createInstrument(opts: CreateInstrumentOpts): ArgyleInstrument {
     const cellsSnap = builderCells.map((c) => ({ x: c.x, y: c.y }));
     renderer.highlightCells(cellsSnap, { durationMs });
     audio.tag('builder').playChord(pitches, durationMs);
+    setLastPlay('builder chord', async () => {
+      renderer.highlightCells(cellsSnap, { durationMs });
+      audio.tag('builder-replay').playChord(pitches, durationMs);
+    });
     await sleep(durationMs);
   }
 
@@ -391,6 +396,10 @@ export function createInstrument(opts: CreateInstrumentOpts): ArgyleInstrument {
     const cell: GridCoord = { x: hit.gx, y: hit.gy };
     if (playMode === 'notes') {
       audio.tag('user-tap').playNote(hit.pitch);
+      setLastPlay('your note', () => {
+        audio.tag('user-tap-replay').playNote(hit.pitch);
+        renderer.highlightCells([cell], { durationMs: 350, className: 'cell-flash' });
+      });
       emitUserPlay([cell]);
       return;
     }
@@ -403,6 +412,12 @@ export function createInstrument(opts: CreateInstrumentOpts): ArgyleInstrument {
       const pitches = autoChordPitches(cell);
       if (pitches.length > 0) {
         audio.tag('auto-chord').playChord(pitches, DEFAULT_CHORD_DURATION);
+        const snap = [...pitches];
+        const cellSnap: GridCoord = { x: cell.x, y: cell.y };
+        setLastPlay('auto chord', () => {
+          audio.tag('auto-chord-replay').playChord(snap, DEFAULT_CHORD_DURATION);
+          renderer.highlightCells([cellSnap], { durationMs: DEFAULT_CHORD_DURATION });
+        });
         // Highlight just the root cell; resolving chord-cell coords across
         // clones is out of scope for this pass.
         renderer.highlightCells([cell], { durationMs: DEFAULT_CHORD_DURATION });

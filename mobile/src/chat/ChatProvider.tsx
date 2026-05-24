@@ -26,6 +26,7 @@ import { useInstrument } from '../grid/InstrumentContext';
 import type { ArgyleInstrument } from '../grid/api';
 import { streamChat } from './api';
 import { executeToolCall } from './tool-calls';
+import { setLastPlay } from '../audio/last-play';
 import type {
   ChatMessage,
   ToolCall,
@@ -182,6 +183,15 @@ export function ChatProvider(props: { children: ReactNode }) {
             result = { ok: false, error: 'instrument not mounted' };
           } else {
             result = await executeToolCall(inst, call);
+            // Register this call as "last played" so the ♪ button replays it.
+            // Audio-producing tools only; set_key/highlight are state changes,
+            // not "things you heard".
+            if (isAudioProducingToolCall(call.name)) {
+              setLastPlay(call.name, async () => {
+                const i = instrumentRef.current;
+                if (i) await executeToolCall(i, call);
+              });
+            }
           }
           setToolLog((prev) => [...prev, { id: call.id, name: call.name, result }]);
           const toolMsg: ChatMessage = {
@@ -220,6 +230,14 @@ export function ChatProvider(props: { children: ReactNode }) {
     // replay is a UI affordance, not a new conversational turn. The
     // audit panel (long-press ♪) is the record of what played.
     await executeToolCall(inst, call);
+    // Tapping ▶ on a chip ALSO updates "last played" so the ♪ button
+    // mirrors what just happened.
+    if (isAudioProducingToolCall(call.name)) {
+      setLastPlay(call.name, async () => {
+        const i = instrumentRef.current;
+        if (i) await executeToolCall(i, call);
+      });
+    }
   }, []);
 
   const value = useMemo<ChatContextValue>(() => ({
@@ -227,6 +245,17 @@ export function ChatProvider(props: { children: ReactNode }) {
   }), [messages, busy, error, send, replay, toolLog]);
 
   return <ChatContext.Provider value={value}>{props.children}</ChatContext.Provider>;
+}
+
+const AUDIO_TOOLS = new Set([
+  'play_chord',
+  'play_note',
+  'play_progression',
+  'play_pattern_from_pitches',
+  'play_progression_from_pitches',
+]);
+function isAudioProducingToolCall(name: string): boolean {
+  return AUDIO_TOOLS.has(name);
 }
 
 export function useChat(): ChatContextValue {

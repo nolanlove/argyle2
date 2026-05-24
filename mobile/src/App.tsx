@@ -20,6 +20,9 @@ import type { GridHandle } from './grid/Grid';
 import type { PlayMode } from './grid/api';
 import { audio } from './audio/engine';
 import { AuditPanel } from './audio/AuditPanel';
+import {
+  hasLastPlay, replayLast, onLastPlayChange, getLastPlayLabel,
+} from './audio/last-play';
 import { TeacherMode } from './modes/TeacherMode';
 import { SongwriterMode } from './modes/SongwriterMode';
 import { LabMode } from './modes/LabMode';
@@ -30,7 +33,13 @@ export function App() {
   const [mode, setModeState] = useState<AppMode>(() => loadMode());
   const [playMode, setPlayMode] = useState<PlayMode>('notes');
   const [auditOpen, setAuditOpen] = useState(false);
+  const [lastPlayLabel, setLastPlayLabel] = useState<string | null>(getLastPlayLabel());
   const longPressTimer = useRef<number | null>(null);
+
+  useEffect(
+    () => onLastPlayChange(() => setLastPlayLabel(getLastPlayLabel())),
+    [],
+  );
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<GridHandle | null>(null);
 
@@ -152,21 +161,28 @@ export function App() {
         {modeLabel(mode)[0]}
       </button>
 
-      {/* Sound check button — visible until audio is verified, then quiet.
-          Plays a test C5 note synchronously inside the click handler so
-          the user can confirm output even before any AI/chord flow runs. */}
+      {/* ♪ replay-last button.
+          Tap → replays the most recent thing that played (AI chord/progression,
+                a cell you tapped, a chord-builder Play, etc.). Falls back to a
+                test C5 if nothing has played yet.
+          Long-press → toggles the audit panel (last ~12 audio events with
+                exact MIDI/freq/instrument). */}
       <button
         className={`sound-check ${audioReady ? 'sound-check-ready' : ''}`}
-        aria-label="Test sound (long-press for audit panel)"
+        aria-label={lastPlayLabel ? `Replay last (${lastPlayLabel})` : 'Test sound'}
+        title={lastPlayLabel ? `Replay: ${lastPlayLabel}` : 'Tap to test audio'}
         onClick={() => {
-          // Skip the play if this click is the end of a long-press.
           if (longPressTimer.current === -1) {
             longPressTimer.current = null;
             return;
           }
           audio.init();
           setTimeout(() => {
-            audio.tag('test').playNote(72, 400);
+            if (hasLastPlay()) {
+              void replayLast();
+            } else {
+              audio.tag('test').playNote(72, 400);
+            }
             if (audio.isReady()) setAudioReady(true);
           }, 50);
         }}
