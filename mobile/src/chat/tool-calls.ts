@@ -211,6 +211,19 @@ export async function executeToolCall(
         if (!Array.isArray(stepsArg) || stepsArg.length === 0) {
           return fail('steps must be a non-empty array');
         }
+        // Top-level bpm — used to convert each step's `beats` into ms.
+        const bpmArg = call.arguments['bpm'];
+        let bpm: number | null = null;
+        if (bpmArg !== undefined) {
+          if (typeof bpmArg !== 'number' || bpmArg < 30 || bpmArg > 240) {
+            return fail('bpm must be a number 30..240');
+          }
+          bpm = bpmArg;
+        }
+        const beatsToMs = (beats: number): number => {
+          // Floor 50ms so a sixteenth at 240 BPM still has audible length.
+          return Math.max(50, Math.round(beats * (60000 / (bpm ?? 90))));
+        };
         // Validate every step up front so we don't half-play on bad input.
         type Step = { pitches: number[]; durationMs: number; label?: string };
         const parsed: Step[] = [];
@@ -229,11 +242,18 @@ export async function executeToolCall(
             }
             ps.push(p);
           }
-          const d = sp['duration_ms'];
-          if (typeof d !== 'number' || !Number.isInteger(d) || d < 1) {
-            return fail(`step ${i}: duration_ms must be positive integer`);
+          // Prefer beats+bpm; fall back to duration_ms; final default 700ms.
+          let durationMs: number;
+          const beatsArg = sp['beats'];
+          const dArg = sp['duration_ms'];
+          if (typeof beatsArg === 'number' && beatsArg > 0) {
+            durationMs = beatsToMs(beatsArg);
+          } else if (typeof dArg === 'number' && Number.isInteger(dArg) && dArg >= 1) {
+            durationMs = dArg;
+          } else {
+            durationMs = 700;
           }
-          const step: Step = { pitches: ps, durationMs: d };
+          const step: Step = { pitches: ps, durationMs };
           if (typeof sp['label'] === 'string') step.label = sp['label'];
           parsed.push(step);
         }

@@ -188,6 +188,24 @@ MOBILE_TEACHER_SYSTEM_PROMPT = (
     "NEVER guess cell coordinates by hand. If you have pitches, use the "
     "*_from_pitches variants instead.\n"
     "  • `highlight_cells(cells)` / `clear_highlight()` — visual only.\n\n"
+    "RHYTHM — give every progression a real tempo and per-chord beats:\n"
+    "  • Top-level `bpm` (beats per minute). Typical ranges: ballads "
+    "60-80, soul/R&B 80-100, pop 100-120, rock 110-140, dance 120-130.\n"
+    "  • Per-step `beats` field. 4 = whole note (1 full bar in 4/4), "
+    "2 = half note, 1 = quarter note, 0.5 = eighth, 0.25 = sixteenth. "
+    "Dotted values OK (3 = dotted half, 1.5 = dotted quarter).\n"
+    "  • Up to 16 bars per progression (max 64 beats total at 4/4).\n"
+    "  • For a real song, look up its actual chord changes + tempo and "
+    "transcribe them. Don't fake it — if you don't know the song, say "
+    "so and offer a close-enough substitute.\n"
+    "  • Example — 'People Get Ready' by Curtis Mayfield, in B♭ major, "
+    "~72 BPM, 8-bar verse pattern with each chord lasting 2 bars (8 "
+    "beats):\n"
+    "    bpm=72, steps=[\n"
+    "      {pitches:[46,58,62,65], beats:8, label:'B♭ (I)'},\n"
+    "      {pitches:[50,58,62,65], beats:8, label:'B♭/D (passing)'},\n"
+    "      ...\n"
+    "    ]\n\n"
     "NASHVILLE NUMBERS — translate first, then play as ONE progression call.\n"
     "  Capital roman = major triad, lowercase = minor, °/dim = diminished. "
     "Build the chord on the appropriate scale degree of the current key.\n\n"
@@ -421,14 +439,25 @@ MOBILE_CHAT_TOOLS = [
             "name": "play_progression_from_pitches",
             "description": (
                 "PREFERRED for multi-chord progressions. Play a sequence of "
-                "chord steps, each step a list of MIDI pitches. Highlights "
-                "and plays each step in turn. Use this for I-V-vi-IV, ii-V-I, "
-                "Nashville-numbers shorthand like '1 6 2 5', etc. — one tool "
-                "call covers the entire progression."
+                "chord steps. Use `beats` per step + a top-level `bpm` for "
+                "real rhythmic timing (quarter=1, half=2, whole=4, etc.). "
+                "Up to 64 steps (16 bars × 4 beats max). Use this for "
+                "real-song chord changes, Nashville shorthand, jazz "
+                "progressions, etc. — one tool call covers the entire "
+                "progression."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
+                    "bpm": {
+                        "type": "integer",
+                        "minimum": 30,
+                        "maximum": 240,
+                        "description": (
+                            "Tempo in beats per minute. Each step's "
+                            "duration is beats * (60000 / bpm) ms."
+                        ),
+                    },
                     "steps": {
                         "type": "array",
                         "items": {
@@ -443,13 +472,33 @@ MOBILE_CHAT_TOOLS = [
                                     },
                                     "minItems": 1,
                                 },
-                                "duration_ms": {"type": "integer", "minimum": 1},
+                                "beats": {
+                                    "type": "number",
+                                    "minimum": 0.25,
+                                    "maximum": 16,
+                                    "description": (
+                                        "Duration in beats. 4 = whole note "
+                                        "(1 bar in 4/4), 2 = half note, "
+                                        "1 = quarter note, 0.5 = eighth, "
+                                        "0.25 = sixteenth. Required unless "
+                                        "you pass duration_ms as fallback."
+                                    ),
+                                },
+                                "duration_ms": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "description": (
+                                        "Optional fallback if `beats` and "
+                                        "`bpm` aren't supplied."
+                                    ),
+                                },
                                 "label": {"type": "string"},
                             },
-                            "required": ["pitches", "duration_ms"],
+                            "required": ["pitches"],
                             "additionalProperties": False,
                         },
                         "minItems": 1,
+                        "maxItems": 64,
                     },
                 },
                 "required": ["steps"],
