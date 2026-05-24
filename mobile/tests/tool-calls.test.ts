@@ -25,6 +25,9 @@ function makeMockInstrument() {
     highlight: (cells: GridCoord[], opts?: HighlightOpts) => {
       record('highlight', cells, opts);
     },
+    setHighlight: (cells: GridCoord[]) => {
+      record('setHighlight', cells);
+    },
     clearHighlight: () => { record('clearHighlight'); },
     playChord: async (cells: GridCoord[], durationMs?: number) => {
       record('playChord', cells, durationMs);

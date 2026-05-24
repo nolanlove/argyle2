@@ -242,6 +242,36 @@ export class GridRenderer {
   }
 
   /**
+   * Set the highlighted cells to EXACTLY this set — cells that were lit and
+   * aren't in `coords` lose the class (and animate out via the CSS
+   * transition on .cell-highlight); cells that weren't lit and are now in
+   * `coords` gain the class. Cells in both sets are left alone so common
+   * notes between adjacent chords don't visibly blink.
+   *
+   * This is the primary API for chord-progression visualization — every
+   * step in a progression calls setHighlight with that step's cells, and
+   * voice leading becomes visible: stable common notes stay lit, dropped
+   * notes fade, new notes light up.
+   */
+  setHighlight(coords: readonly GridCoord[], className: string = DEFAULT_HIGHLIGHT_CLASS): void {
+    const wantKeys = new Set<string>();
+    for (const { x, y } of coords) wantKeys.add(key(x, y));
+    for (const [k, rec] of this.cells) {
+      const has = rec.el.classList.contains(className);
+      const want = wantKeys.has(k);
+      if (want && !has) {
+        // Cancel any pending auto-clear so it doesn't strip us mid-step.
+        const pending = this.pendingClears.get(rec.el);
+        if (pending !== undefined) window.clearTimeout(pending);
+        this.pendingClears.delete(rec.el);
+        rec.el.classList.add(className);
+      } else if (!want && has) {
+        rec.el.classList.remove(className);
+      }
+    }
+  }
+
+  /**
    * Hit-test a client point. Walks up from elementFromPoint to the cell
    * carrying `data-gx`/`data-gy`. Returns null if the point isn't on a cell.
    */

@@ -47,6 +47,7 @@ function pitchListLabel(pitches: readonly number[]): string {
 /** Subset of ArgyleInstrument the dispatcher actually calls. */
 export interface ToolTargetInstrument {
   highlight: ArgyleInstrument['highlight'];
+  setHighlight: ArgyleInstrument['setHighlight'];
   clearHighlight: ArgyleInstrument['clearHighlight'];
   playChord: ArgyleInstrument['playChord'];
   playNote: ArgyleInstrument['playNote'];
@@ -188,10 +189,10 @@ export async function executeToolCall(
             const c = cellsForPitch(p);
             if (c) cells.push(c);
           }
-          if (cells.length > 0) instrument.highlight(cells, { durationMs: duration });
+          instrument.setHighlight(cells);
           audio.tag('ai-chord').playChord(pitches, duration);
           await new Promise<void>((r) => setTimeout(r, duration));
-          instrument.clearHighlight();
+          instrument.setHighlight([]);
           return { ok: true, summary: `played block chord ${pitchListLabel(pitches)}` };
         }
         const ordered = voicing === 'arpeggio_up'
@@ -199,11 +200,14 @@ export async function executeToolCall(
           : [...pitches].sort((a, b) => b - a);
         for (const p of ordered) {
           const c = cellsForPitch(p);
-          if (c) instrument.highlight([c], { durationMs: stepMs });
+          // setHighlight diffs against the previous note — natural arpeggio
+          // visual: each note lights, fades during the next via the CSS
+          // transition on .cell-highlight.
+          instrument.setHighlight(c ? [c] : []);
           audio.tag('ai-arp').playNote(p, stepMs);
           await new Promise<void>((r) => setTimeout(r, stepMs));
-          instrument.clearHighlight();
         }
+        instrument.setHighlight([]);
         return { ok: true, summary: `played ${voicing} ${ordered.length} note(s)` };
       }
       case 'play_progression_from_pitches': {
@@ -265,18 +269,24 @@ export async function executeToolCall(
           return first ? { x: first.x, y: first.y } : null;
         };
         const audio = await getAudio();
-        for (const step of parsed) {
+        for (let i = 0; i < parsed.length; i++) {
+          const step = parsed[i]!;
           const cells: CellCoord[] = [];
           for (const p of step.pitches) {
             const c = cellsForPitch(p);
             if (c) cells.push(c);
           }
-          if (cells.length > 0) instrument.highlight(cells, { durationMs: step.durationMs });
+          // setHighlight diffs against the currently-lit set so common
+          // notes between this chord and the previous one stay steady
+          // (no blink) — only changing notes fade in/out. That's how
+          // the user sees voice leading move across the grid.
+          instrument.setHighlight(cells);
           audio.tag(`ai-prog${step.label ? `:${step.label}` : ''}`)
                .playChord(step.pitches, step.durationMs);
           await new Promise<void>((r) => setTimeout(r, step.durationMs));
-          instrument.clearHighlight();
         }
+        // Fade out the last chord at end of progression.
+        instrument.setHighlight([]);
         const summary = parsed
           .map((s) => s.label ?? pitchListLabel(s.pitches))
           .join(' → ');

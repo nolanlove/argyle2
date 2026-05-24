@@ -57,6 +57,11 @@ export interface ChordBuilder {
 
 export interface ArgyleInstrument {
   highlight(cells: GridCoord[], opts?: HighlightOpts): void;
+  /** Set the highlighted set to exactly these cells. Cells previously lit
+   *  but not in `cells` fade out via the CSS transition; cells in `cells`
+   *  not previously lit fade in. Common cells stay steady — primary API
+   *  for voice-leading visualization across a progression. */
+  setHighlight(cells: GridCoord[]): void;
   clearHighlight(): void;
   playChord(cells: GridCoord[], durationMs?: number): Promise<void>;
   playNote(cell: GridCoord, durationMs?: number): Promise<void>;
@@ -300,6 +305,10 @@ export function createInstrument(opts: CreateInstrumentOpts): ArgyleInstrument {
     renderer.highlightCells(cells, opts);
   }
 
+  function instrumentSetHighlight(cells: GridCoord[]): void {
+    renderer.setHighlight(cells);
+  }
+
   function instrumentClearHighlight(): void {
     renderer.clearHighlights();
   }
@@ -336,12 +345,18 @@ export function createInstrument(opts: CreateInstrumentOpts): ArgyleInstrument {
         await sleep(step.durationMs);
         continue;
       }
-      renderer.highlightCells(step.cells, { durationMs: step.durationMs });
+      // setHighlight (not highlightCells) so common notes between adjacent
+      // steps stay steady — voice leading is visible.
+      renderer.setHighlight(step.cells);
       audio.tag('progression').playChord(pitches, step.durationMs);
       await sleep(step.durationMs);
       if (myToken !== progressionToken) return;
-      renderer.clearHighlights();
+      // Don't clear here — next iteration's setHighlight handles the diff
+      // (cells that drop out fade via the CSS transition, common cells
+      // stay lit, new cells fade in).
     }
+    // Final step: fade everything out at end of progression.
+    renderer.setHighlight([]);
   }
 
   function instrumentStopAll(): void {
@@ -390,6 +405,7 @@ export function createInstrument(opts: CreateInstrumentOpts): ArgyleInstrument {
 
   return {
     highlight: instrumentHighlight,
+    setHighlight: instrumentSetHighlight,
     clearHighlight: instrumentClearHighlight,
     playChord: instrumentPlayChord,
     playNote: instrumentPlayNote,
