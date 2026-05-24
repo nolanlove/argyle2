@@ -204,6 +204,7 @@ export function createInstrument(opts: CreateInstrumentOpts): ArgyleInstrument {
   function builderClear(): void {
     if (builderCells.length === 0) return;
     builderCells.length = 0;
+    renderer.setHighlight([]);
     emitChange();
   }
 
@@ -220,10 +221,13 @@ export function createInstrument(opts: CreateInstrumentOpts): ArgyleInstrument {
     const pitches = pitchesFor(builderCells);
     if (pitches.length === 0) return;
     const cellsSnap = builderCells.map((c) => ({ x: c.x, y: c.y }));
-    renderer.highlightCells(cellsSnap, { durationMs });
+    // setHighlight (not highlightCells with autoclear) so the chord stays
+    // lit after the audio decays — same as desktop's chord mode. User
+    // taps Play again to re-hear, or Clear to unlight.
+    renderer.setHighlight(cellsSnap);
     audio.tag('builder').playChord(pitches, durationMs);
     setLastPlay('builder chord', async () => {
-      renderer.highlightCells(cellsSnap, { durationMs });
+      renderer.setHighlight(cellsSnap);
       audio.tag('builder-replay').playChord(pitches, durationMs);
     });
     await sleep(durationMs);
@@ -404,7 +408,20 @@ export function createInstrument(opts: CreateInstrumentOpts): ArgyleInstrument {
       return;
     }
     if (playMode === 'chord-builder') {
-      builderAdd(cell);
+      // Toggle membership in the current chord stack — tapping a lit
+      // cell removes it, tapping an empty cell adds it. Either way
+      // preview the note so you can hear what you're stacking, and
+      // refresh the highlight so the full accumulated chord stays
+      // visibly lit until Play / Clear.
+      const k = coordKey(cell);
+      const already = builderCells.some((c) => coordKey(c) === k);
+      if (already) {
+        builderRemove(cell);
+      } else {
+        builderAdd(cell);
+        audio.tag('builder-preview').playNote(hit.pitch);
+      }
+      renderer.setHighlight(builderCells);
       emitUserPlay([cell]);
       return;
     }
