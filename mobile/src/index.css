@@ -750,6 +750,36 @@ html, body, #root {
   text-align: center;
 }
 
+/* Chord identifier — small floating pill in chord-builder mode. */
+.chord-identifier {
+  position: absolute;
+  /* Sit just below the mode pill */
+  top: calc(var(--argyle-pad-top, 0px) + env(safe-area-inset-top, 0px) + 68px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(16, 185, 129, 0.5);
+  border-radius: 999px;
+  color: #f1f5f9;
+  font-size: 0.9rem;
+  z-index: 10;
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+  max-width: calc(100% - 24px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chord-id-name {
+  font-weight: 700;
+  color: #34d399;
+}
+.chord-id-notes {
+  color: #94a3b8;
+  font-size: 0.8rem;
+}
+
 .audio-hint {
   position: absolute;
   bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);

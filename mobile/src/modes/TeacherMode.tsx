@@ -8,6 +8,7 @@ import { useInstrument } from '../grid/InstrumentContext';
 import type { PlayMode } from '../grid/api';
 import { ChatProvider } from '../chat/ChatProvider';
 import { ChatPanel } from '../chat/ChatPanel';
+import { ChordIdentifier } from './ChordIdentifier';
 
 interface TeacherModeProps {
   playMode: PlayMode;
@@ -33,11 +34,14 @@ function Overlay({ playMode, setPlayMode }: OverlayProps) {
   // we don't render any builder UI from here.
   useInstrument();
   return (
-    <div className="mode-bar" role="tablist">
-      <ModeButton current={playMode} mode="notes" label="Notes" setMode={setPlayMode} />
-      <ModeButton current={playMode} mode="chord-builder" label="Chord" setMode={setPlayMode} />
-      <ModeButton current={playMode} mode="auto-chord" label="Auto" setMode={setPlayMode} />
-    </div>
+    <>
+      <div className="mode-bar" role="tablist">
+        <ModeButton current={playMode} mode="notes" label="Notes" setMode={setPlayMode} />
+        <ModeButton current={playMode} mode="chord-builder" label="Chord" setMode={setPlayMode} />
+        <ModeButton current={playMode} mode="auto-chord" label="Auto" setMode={setPlayMode} />
+      </div>
+      {playMode === 'chord-builder' && <ChordIdentifier />}
+    </>
   );
 }
 
