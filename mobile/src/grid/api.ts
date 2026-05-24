@@ -62,6 +62,11 @@ export interface ArgyleInstrument {
    *  not previously lit fade in. Common cells stay steady — primary API
    *  for voice-leading visualization across a progression. */
   setHighlight(cells: GridCoord[]): void;
+  /** Return every visible/rendered cell whose pitch matches `midi`. Use
+   *  this from chat tool calls so the highlight lands on ACTUALLY-rendered
+   *  cells (the smallest-y-clone heuristic in tool-calls.ts often picked
+   *  cells outside the visible diamond). */
+  cellsForPitch(midi: number): GridCoord[];
   clearHighlight(): void;
   playChord(cells: GridCoord[], durationMs?: number): Promise<void>;
   playNote(cell: GridCoord, durationMs?: number): Promise<void>;
@@ -309,6 +314,10 @@ export function createInstrument(opts: CreateInstrumentOpts): ArgyleInstrument {
     renderer.setHighlight(cells);
   }
 
+  function instrumentCellsForPitch(midi: number): GridCoord[] {
+    return renderer.cellsForPitch(midi);
+  }
+
   function instrumentClearHighlight(): void {
     renderer.clearHighlights();
   }
@@ -406,6 +415,7 @@ export function createInstrument(opts: CreateInstrumentOpts): ArgyleInstrument {
   return {
     highlight: instrumentHighlight,
     setHighlight: instrumentSetHighlight,
+    cellsForPitch: instrumentCellsForPitch,
     clearHighlight: instrumentClearHighlight,
     playChord: instrumentPlayChord,
     playNote: instrumentPlayNote,

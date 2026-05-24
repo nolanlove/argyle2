@@ -28,6 +28,10 @@ function makeMockInstrument() {
     setHighlight: (cells: GridCoord[]) => {
       record('setHighlight', cells);
     },
+    cellsForPitch: (midi: number) => {
+      record('cellsForPitch', midi);
+      return [];
+    },
     clearHighlight: () => { record('clearHighlight'); },
     playChord: async (cells: GridCoord[], durationMs?: number) => {
       record('playChord', cells, durationMs);

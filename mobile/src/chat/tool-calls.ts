@@ -48,6 +48,7 @@ function pitchListLabel(pitches: readonly number[]): string {
 export interface ToolTargetInstrument {
   highlight: ArgyleInstrument['highlight'];
   setHighlight: ArgyleInstrument['setHighlight'];
+  cellsForPitch: ArgyleInstrument['cellsForPitch'];
   clearHighlight: ArgyleInstrument['clearHighlight'];
   playChord: ArgyleInstrument['playChord'];
   playNote: ArgyleInstrument['playNote'];
@@ -167,9 +168,26 @@ export async function executeToolCall(
         const stepMs = stepRes.value ?? 300;
 
         const cellsForPitch = (p: number): CellCoord | null => {
+          // Ask the renderer for cells that are ACTUALLY rendered (visible
+          // after the corner-inclusive geometry filter). The smallest-y
+          // clone heuristic against getAllCloneCoordsForPitch was picking
+          // cells at the very top of the grid that aren't always rendered.
+          const rendered = instrument.cellsForPitch(p);
+          if (rendered.length > 0) {
+            // Prefer cells closer to the center for stable visuals.
+            const cx = gw / 2, cy = gh / 2;
+            const sorted = [...rendered].sort((a, b) => {
+              const da = (a.x - cx) ** 2 + (a.y - cy) ** 2;
+              const db = (b.x - cx) ** 2 + (b.y - cy) ** 2;
+              return da - db;
+            });
+            const f = sorted[0];
+            return f ? { x: f.x, y: f.y } : null;
+          }
+          // Fallback to pure-math enumeration if the renderer can't find one
+          // (shouldn't happen for in-grid pitches, but keeps the audio
+          // playing even when the visual is off-screen).
           const clones = getAllCloneCoordsForPitch(p, origin, gw, gh);
-          if (clones.length === 0) return null;
-          // Prefer the smallest-y (lowest visual position) clone.
           const sorted = [...clones].sort((a, b) => a.y - b.y || a.x - b.x);
           const first = sorted[0];
           return first ? { x: first.x, y: first.y } : null;

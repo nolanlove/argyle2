@@ -242,6 +242,21 @@ export class GridRenderer {
   }
 
   /**
+   * Find ALL rendered cells (visible on the grid) that play this MIDI
+   * pitch. There can be multiple "clones" of the same pitch on the
+   * isomorphic grid — this returns every one currently in the DOM.
+   * Empty if the pitch isn't rendered (out of grid range or filtered
+   * by the corner-inclusive visibility test).
+   */
+  cellsForPitch(midi: number): GridCoord[] {
+    const out: GridCoord[] = [];
+    for (const rec of this.cells.values()) {
+      if (rec.pitch === midi) out.push({ x: rec.gx, y: rec.gy });
+    }
+    return out;
+  }
+
+  /**
    * Set the highlighted cells to EXACTLY this set — cells that were lit and
    * aren't in `coords` lose the class (and animate out via the CSS
    * transition on .cell-highlight); cells that weren't lit and are now in
