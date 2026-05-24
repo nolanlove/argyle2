@@ -48,19 +48,34 @@ html, body, #root {
 /* Cells get their colors set inline by the renderer (so key changes don't
    require a CSS rebuild). Highlight class only carries the animated outline. */
 .grid-cell {
-  /* Slow fade on box-shadow + filter so notes don't snap on/off. The
-     fade-out is the key cue: when a chord changes, the previous notes
-     ghost out gradually while the new ones light up — voice leading
-     becomes visible. */
+  /* Fast fade-IN so the press feels responsive; slow fade-OUT so the
+     voice-leading transition between chords is visible (a note that
+     drops out of the next chord ghosts away over ~600ms while a new
+     note lights up in 100ms). */
   transition:
-    transform 80ms ease,
+    background-color 600ms cubic-bezier(0.2, 0.0, 0.0, 1.0),
+    color 600ms ease,
     box-shadow 600ms cubic-bezier(0.2, 0.0, 0.0, 1.0),
-    filter 600ms ease;
+    transform 600ms cubic-bezier(0.2, 0.0, 0.0, 1.0);
 }
+/* Aggressive solid-green fill (matches desktop). !important wins over the
+   per-cell inline background set by applyKeyStyling, so the played cell
+   actually takes over visually instead of just getting an outline. */
 .grid-cell.cell-highlight {
-  box-shadow: 0 0 0 3px #10b981, 0 0 18px rgba(16, 185, 129, 0.75);
-  /* Slight brightness lift makes the cell itself feel lit, not just outlined. */
-  filter: brightness(1.15) saturate(1.1);
+  background-color: #10b981 !important;
+  color: #ffffff !important;
+  box-shadow:
+    0 0 0 2px #ffffff,
+    0 0 0 5px #10b981,
+    0 0 24px 4px rgba(16, 185, 129, 0.85);
+  transform: scale(1.05);
+  /* Snap IN, fade OUT — use a shorter transition while the class is being
+     added by giving the in-state its own near-instant transition. */
+  transition:
+    background-color 60ms ease-out,
+    color 60ms ease-out,
+    box-shadow 80ms ease-out,
+    transform 80ms ease-out;
   z-index: 5;
 }
 /* Brief flash when the user taps a cell or the AI plays one — confirms
