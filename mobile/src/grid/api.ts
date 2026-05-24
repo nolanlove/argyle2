@@ -390,6 +390,11 @@ export function createInstrument(opts: CreateInstrumentOpts): ArgyleInstrument {
   }
 
   function instrumentSetPlayMode(mode: PlayMode): void {
+    // Leaving chord-builder mode: clear the visible stack so it doesn't
+    // linger as stray green cells under Notes or Auto.
+    if (playMode === 'chord-builder' && mode !== 'chord-builder') {
+      builderClear();
+    }
     playMode = mode;
     renderer.setPlayMode(mode);
   }
@@ -409,10 +414,10 @@ export function createInstrument(opts: CreateInstrumentOpts): ArgyleInstrument {
     }
     if (playMode === 'chord-builder') {
       // Toggle membership in the current chord stack — tapping a lit
-      // cell removes it, tapping an empty cell adds it. Either way
-      // preview the note so you can hear what you're stacking, and
-      // refresh the highlight so the full accumulated chord stays
-      // visibly lit until Play / Clear.
+      // cell removes it, tapping an empty cell adds it + previews.
+      // Whole stack stays lit on the grid; ♪ replays the stack as a
+      // chord (not the last individual note) because we register the
+      // builderPlay thunk after each modification.
       const k = coordKey(cell);
       const already = builderCells.some((c) => coordKey(c) === k);
       if (already) {
@@ -422,6 +427,9 @@ export function createInstrument(opts: CreateInstrumentOpts): ArgyleInstrument {
         audio.tag('builder-preview').playNote(hit.pitch);
       }
       renderer.setHighlight(builderCells);
+      if (builderCells.length > 0) {
+        setLastPlay('chord', () => { void builderPlay(); });
+      }
       emitUserPlay([cell]);
       return;
     }
