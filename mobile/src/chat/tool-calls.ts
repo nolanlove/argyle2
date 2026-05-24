@@ -167,30 +167,22 @@ export async function executeToolCall(
         const duration = durRes.value ?? 600;
         const stepMs = stepRes.value ?? 300;
 
-        const cellsForPitch = (p: number): CellCoord | null => {
-          // Ask the renderer for cells that are ACTUALLY rendered (visible
-          // after the corner-inclusive geometry filter). The smallest-y
-          // clone heuristic against getAllCloneCoordsForPitch was picking
-          // cells at the very top of the grid that aren't always rendered.
+        // Return EVERY rendered clone for a pitch — light all of them.
+        // This solves two problems at once:
+        //   1. We don't have to guess which clone to highlight (the
+        //      single-clone picker missed cells off-screen / outside the
+        //      corner-inclusive visible diamond and lit nothing).
+        //   2. The isomorphic-grid story is that the same pitch class
+        //      appears in multiple positions — showing them all lit
+        //      reinforces that the layout has structure.
+        const cellsForPitch = (p: number): CellCoord[] => {
           const rendered = instrument.cellsForPitch(p);
-          if (rendered.length > 0) {
-            // Prefer cells closer to the center for stable visuals.
-            const cx = gw / 2, cy = gh / 2;
-            const sorted = [...rendered].sort((a, b) => {
-              const da = (a.x - cx) ** 2 + (a.y - cy) ** 2;
-              const db = (b.x - cx) ** 2 + (b.y - cy) ** 2;
-              return da - db;
-            });
-            const f = sorted[0];
-            return f ? { x: f.x, y: f.y } : null;
-          }
-          // Fallback to pure-math enumeration if the renderer can't find one
-          // (shouldn't happen for in-grid pitches, but keeps the audio
-          // playing even when the visual is off-screen).
+          if (rendered.length > 0) return rendered.map((c) => ({ x: c.x, y: c.y }));
+          // Fallback when renderer has no match — happens only for out-of-band
+          // pitches like a chord voiced above the rendered region. Keeps
+          // audio alive even if no visual lands.
           const clones = getAllCloneCoordsForPitch(p, origin, gw, gh);
-          const sorted = [...clones].sort((a, b) => a.y - b.y || a.x - b.x);
-          const first = sorted[0];
-          return first ? { x: first.x, y: first.y } : null;
+          return clones.map((c) => ({ x: c.x, y: c.y }));
         };
 
         // CRITICAL: we audio.playChord/playNote the AI's EXACT pitches.
@@ -203,10 +195,7 @@ export async function executeToolCall(
         const audio = await getAudio();
         if (voicing === 'block') {
           const cells: CellCoord[] = [];
-          for (const p of pitches) {
-            const c = cellsForPitch(p);
-            if (c) cells.push(c);
-          }
+          for (const p of pitches) cells.push(...cellsForPitch(p));
           instrument.setHighlight(cells);
           audio.tag('ai-chord').playChord(pitches, duration);
           await new Promise<void>((r) => setTimeout(r, duration));
@@ -217,11 +206,10 @@ export async function executeToolCall(
           ? [...pitches].sort((a, b) => a - b)
           : [...pitches].sort((a, b) => b - a);
         for (const p of ordered) {
-          const c = cellsForPitch(p);
           // setHighlight diffs against the previous note — natural arpeggio
-          // visual: each note lights, fades during the next via the CSS
-          // transition on .cell-highlight.
-          instrument.setHighlight(c ? [c] : []);
+          // visual: each note's clones light, fade during the next via the
+          // CSS transition on .cell-highlight.
+          instrument.setHighlight(cellsForPitch(p));
           audio.tag('ai-arp').playNote(p, stepMs);
           await new Promise<void>((r) => setTimeout(r, stepMs));
         }
@@ -279,21 +267,19 @@ export async function executeToolCall(
           if (typeof sp['label'] === 'string') step.label = sp['label'];
           parsed.push(step);
         }
-        const cellsForPitch = (p: number): CellCoord | null => {
+        // Light every rendered clone of each chord pitch (see comment on
+        // the same-named function in play_pattern_from_pitches above).
+        const cellsForPitch = (p: number): CellCoord[] => {
+          const rendered = instrument.cellsForPitch(p);
+          if (rendered.length > 0) return rendered.map((c) => ({ x: c.x, y: c.y }));
           const clones = getAllCloneCoordsForPitch(p, origin, gw, gh);
-          if (clones.length === 0) return null;
-          const sorted = [...clones].sort((a, b) => a.y - b.y || a.x - b.x);
-          const first = sorted[0];
-          return first ? { x: first.x, y: first.y } : null;
+          return clones.map((c) => ({ x: c.x, y: c.y }));
         };
         const audio = await getAudio();
         for (let i = 0; i < parsed.length; i++) {
           const step = parsed[i]!;
           const cells: CellCoord[] = [];
-          for (const p of step.pitches) {
-            const c = cellsForPitch(p);
-            if (c) cells.push(c);
-          }
+          for (const p of step.pitches) cells.push(...cellsForPitch(p));
           // setHighlight diffs against the currently-lit set so common
           // notes between this chord and the previous one stay steady
           // (no blink) — only changing notes fade in/out. That's how
