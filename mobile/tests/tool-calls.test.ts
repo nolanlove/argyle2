@@ -4,8 +4,30 @@
  * onUserPlay surface.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+// tool-calls.ts dynamically imports the real audio engine (Tone.js) for the
+// play_pattern_from_pitches path. Tone touches browser globals at import time
+// and throws under the node test env, which the dispatcher catches as
+// { ok: false }. Stub the engine with a chainable no-op so the dispatcher
+// reaches the instrument calls we actually assert on.
+vi.mock('../src/audio/engine', () => {
+  const playNote = vi.fn();
+  const playChord = vi.fn();
+  const audio = {
+    // tag() is chainable: audio.tag('x').playChord(...).
+    tag: () => audio,
+    playNote,
+    playChord,
+    isReady: () => true,
+    init: async () => {},
+    stopAll: () => {},
+  };
+  return { audio };
+});
+
 import { executeToolCall } from '../src/chat/tool-calls';
+import { audio as mockAudio } from '../src/audio/engine';
 import type { ToolTargetInstrument } from '../src/chat/tool-calls';
 import type { ToolCall } from '../src/chat/types';
 import type { GridCoord, KeyMode } from '../src/core';
@@ -30,7 +52,10 @@ function makeMockInstrument() {
     },
     cellsForPitch: (midi: number) => {
       record('cellsForPitch', midi);
-      return [];
+      // Return a single representative rendered cell per pitch so the
+      // dispatcher highlights one cell per note (real renderer behavior) and
+      // doesn't fall back to the all-clones path.
+      return [{ x: ((midi % 20) + 20) % 20, y: 0 }];
     },
     clearHighlight: () => { record('clearHighlight'); },
     playChord: async (cells: GridCoord[], durationMs?: number) => {
@@ -55,7 +80,11 @@ function call(name: string, args: Record<string, unknown>): ToolCall {
 
 describe('executeToolCall — happy path', () => {
   let mock: ReturnType<typeof makeMockInstrument>;
-  beforeEach(() => { mock = makeMockInstrument(); });
+  beforeEach(() => {
+    mock = makeMockInstrument();
+    vi.mocked(mockAudio.playNote).mockClear();
+    vi.mocked(mockAudio.playChord).mockClear();
+  });
 
   it('highlights cells', async () => {
     const res = await executeToolCall(mock.instrument, call('highlight_cells', {
@@ -124,9 +153,14 @@ describe('executeToolCall — happy path', () => {
       duration_ms: 800,
     }));
     expect(res.ok).toBe(true);
-    expect(mock.calls[0]?.name).toBe('playChord');
-    expect((mock.calls[0]?.args[0] as GridCoord[]).length).toBe(3);
-    expect(mock.calls[0]?.args[1]).toBe(800);
+    // Audio gets the AI's EXACT pitches (the dispatcher bypasses the instrument
+    // for sound — see the round-trip comment in tool-calls.ts — and uses the
+    // instrument only to highlight the matching cells).
+    expect(vi.mocked(mockAudio.playChord)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(mockAudio.playChord).mock.calls[0]).toEqual([[60, 64, 67], 800]);
+    // 3 pitches → 3 highlighted cells via setHighlight.
+    const setHi = mock.calls.find((c) => c.name === 'setHighlight' && (c.args[0] as GridCoord[]).length > 0);
+    expect((setHi?.args[0] as GridCoord[]).length).toBe(3);
   });
 
   it('plays pattern from pitches (arpeggio_up sorts ascending)', async () => {
@@ -136,12 +170,11 @@ describe('executeToolCall — happy path', () => {
       step_ms: 200,
     }));
     expect(res.ok).toBe(true);
-    expect(mock.calls[0]?.name).toBe('playProgression');
-    const steps = mock.calls[0]?.args[0] as ProgressionStep[];
-    expect(steps.length).toBe(3);
-    // Steps in ascending pitch order — but we can only verify durations
-    // and step count here without cracking the cell→pitch math open.
-    expect(steps.every((s) => s.durationMs === 200)).toBe(true);
+    // Arpeggio plays one note per step, in ascending pitch order, each for step_ms.
+    expect(vi.mocked(mockAudio.playNote)).toHaveBeenCalledTimes(3);
+    const noteCalls = vi.mocked(mockAudio.playNote).mock.calls;
+    expect(noteCalls.map((c) => c[0])).toEqual([60, 64, 67]);
+    expect(noteCalls.every((c) => c[1] === 200)).toBe(true);
   });
 });
 

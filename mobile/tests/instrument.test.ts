@@ -21,17 +21,23 @@ function makeStubRenderer() {
     setPlayMode: () => {},
     highlightCells: () => {},
     clearHighlights: () => {},
+    setHighlight: () => {},
+    cellsForPitch: () => [],
   } as unknown as Parameters<typeof createInstrument>[0]['renderer'];
 }
 
 function makeStubAudio() {
-  return {
+  const stub = {
     init: async () => {},
     isReady: () => true,
+    // tag() is chainable on the real engine (audio.tag('x').playNote(...)) —
+    // return the stub so the chain resolves.
+    tag: () => stub,
     playNote: () => {},
     playChord: () => {},
     stopAll: () => {},
-  } as unknown as Parameters<typeof createInstrument>[0]['audio'];
+  };
+  return stub as unknown as Parameters<typeof createInstrument>[0]['audio'];
 }
 
 class MemStorage implements StorageLike {
