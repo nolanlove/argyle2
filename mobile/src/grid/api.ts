@@ -338,6 +338,10 @@ export function createInstrument(opts: CreateInstrumentOpts): ArgyleInstrument {
     const pitches = pitchesFor(cells);
     if (pitches.length === 0) return;
     renderer.highlightCells(cells, { durationMs });
+    // Match the tap feel: every play event also flashes blue. ♪-replays
+    // and AI playback go through here, so this is what makes those routes
+    // visually identical to a tap.
+    renderer.highlightCells(cells, { className: 'cell-flash', durationMs: 350 });
     audio.tag('cells-chord').playChord(pitches, durationMs);
     await sleep(durationMs);
   }
@@ -349,6 +353,7 @@ export function createInstrument(opts: CreateInstrumentOpts): ArgyleInstrument {
     const info = getPitchAt(cell.x, cell.y, originPitch);
     if (!info) return;
     renderer.highlightCells([cell], { durationMs });
+    renderer.highlightCells([cell], { className: 'cell-flash', durationMs: 350 });
     audio.tag('cells-note').playNote(info.pitch, durationMs);
     await sleep(durationMs);
   }
@@ -366,6 +371,9 @@ export function createInstrument(opts: CreateInstrumentOpts): ArgyleInstrument {
       // setHighlight (not highlightCells) so common notes between adjacent
       // steps stay steady — voice leading is visible.
       renderer.setHighlight(step.cells);
+      // Blue cell-flash pulse on every step so progression playback feels
+      // like a series of taps (matching the user-tap visual).
+      renderer.highlightCells(step.cells, { className: 'cell-flash', durationMs: 350 });
       audio.tag('progression').playChord(pitches, step.durationMs);
       await sleep(step.durationMs);
       if (myToken !== progressionToken) return;

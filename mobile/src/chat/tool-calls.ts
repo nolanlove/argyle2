@@ -197,6 +197,9 @@ export async function executeToolCall(
           const cells: CellCoord[] = [];
           for (const p of pitches) cells.push(...cellsForPitch(p));
           instrument.setHighlight(cells);
+          // Match the tap experience: each fresh play event also gets the
+          // blue cell-flash pulse, layered on top of the green fill.
+          instrument.highlight(cells, { className: 'cell-flash', durationMs: 350 });
           audio.tag('ai-chord').playChord(pitches, duration);
           await new Promise<void>((r) => setTimeout(r, duration));
           instrument.setHighlight([]);
@@ -209,7 +212,10 @@ export async function executeToolCall(
           // setHighlight diffs against the previous note — natural arpeggio
           // visual: each note's clones light, fade during the next via the
           // CSS transition on .cell-highlight.
-          instrument.setHighlight(cellsForPitch(p));
+          const arpCells = cellsForPitch(p);
+          instrument.setHighlight(arpCells);
+          // Per-note blue flash so the arpeggio visually pulses like taps do.
+          instrument.highlight(arpCells, { className: 'cell-flash', durationMs: 350 });
           audio.tag('ai-arp').playNote(p, stepMs);
           await new Promise<void>((r) => setTimeout(r, stepMs));
         }
@@ -285,6 +291,9 @@ export async function executeToolCall(
           // (no blink) — only changing notes fade in/out. That's how
           // the user sees voice leading move across the grid.
           instrument.setHighlight(cells);
+          // Per-step blue flash so each chord in the progression visually
+          // pulses like a tap — matches the tap-feel for ♪ replays.
+          instrument.highlight(cells, { className: 'cell-flash', durationMs: 350 });
           audio.tag(`ai-prog${step.label ? `:${step.label}` : ''}`)
                .playChord(step.pitches, step.durationMs);
           await new Promise<void>((r) => setTimeout(r, step.durationMs));
