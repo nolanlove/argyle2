@@ -11,7 +11,7 @@
  * Pure logic. Owns no DOM of its own — orchestrates the renderer + audio.
  */
 
-import type { GridRenderer, HitCell } from './renderer';
+import type { GridRenderer, HitCell, LabelMode } from './renderer';
 import type { AudioEngine } from '../audio/engine';
 import { setLastPlay } from '../audio/last-play';
 import type { GridCoord, KeyMode } from '../core';
@@ -76,6 +76,10 @@ export interface ArgyleInstrument {
   setKey(rootPitchClass: number, mode: KeyMode): void;
   setPlayMode(mode: PlayMode): void;
   getPlayMode(): PlayMode;
+  /** What each cell prints (note name / degree / roman / none). */
+  setLabelMode(mode: LabelMode): void;
+  /** Toggle clone highlighting across the isomorphic grid. */
+  setClones(on: boolean): void;
   builder: ChordBuilder;
   /** Called for every user-driven hit (tap or drag-into-cell). */
   onUserPlay(cb: (cells: GridCoord[]) => void): () => void;
@@ -407,6 +411,14 @@ export function createInstrument(opts: CreateInstrumentOpts): ArgyleInstrument {
     renderer.setPlayMode(mode);
   }
 
+  function instrumentSetLabelMode(mode: LabelMode): void {
+    renderer.setLabelMode(mode);
+  }
+
+  function instrumentSetClones(on: boolean): void {
+    renderer.setClones(on);
+  }
+
   // ---- gesture routing ----
 
   function handleUserHit(hit: HitCell): void {
@@ -472,6 +484,8 @@ export function createInstrument(opts: CreateInstrumentOpts): ArgyleInstrument {
     setKey: instrumentSetKey,
     setPlayMode: instrumentSetPlayMode,
     getPlayMode: () => playMode,
+    setLabelMode: instrumentSetLabelMode,
+    setClones: instrumentSetClones,
     builder,
     onUserPlay(cb) {
       userPlayCbs.add(cb);

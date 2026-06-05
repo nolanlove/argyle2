@@ -42,6 +42,15 @@ import type { AudioEngine } from '../audio/engine';
 
 export type PlayMode = 'notes' | 'chord-builder' | 'auto-chord';
 
+/**
+ * What each cell prints:
+ *   - 'notes'   — note name (C, C#, …)
+ *   - 'degrees' — scale degree relative to the key root (1, ♭2, 2, …)
+ *   - 'roman'   — Roman numeral for in-key degrees (I…VII), blank off-key
+ *   - 'none'    — no label
+ */
+export type LabelMode = 'notes' | 'degrees' | 'roman' | 'none';
+
 export interface GridRendererOpts {
   host: HTMLElement;
   gridWidth: number;
@@ -64,12 +73,39 @@ export interface HitCell {
 
 interface CellRecord {
   el: HTMLDivElement;
+  labelEl: HTMLSpanElement;
   gx: number;
   gy: number;
   pitch: Midi;
 }
 
 const DEFAULT_HIGHLIGHT_CLASS = 'cell-highlight';
+
+// Scale-degree text by chromatic interval (0..11) above the key root.
+// Movable-do numbering with flats for the chromatic in-between tones.
+const DEGREE_LABELS = ['1', '♭2', '2', '♭3', '3', '4', '♭5', '5', '♭6', '6', '♭7', '7'] as const;
+const ROMAN_NUMERALS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'] as const;
+
+/**
+ * Text for a cell given the active label mode and key. `intervals` is the
+ * current scale's interval set (for the roman/in-key test).
+ */
+function computeLabel(
+  pitch: number,
+  rootPitchClass: number,
+  intervals: readonly number[],
+  mode: LabelMode,
+): string {
+  const pc = ((pitch % 12) + 12) % 12;
+  if (mode === 'none') return '';
+  if (mode === 'notes') return musicalNotes[pc]!;
+  const interval = ((pc - rootPitchClass) % 12 + 12) % 12;
+  if (mode === 'degrees') return DEGREE_LABELS[interval]!;
+  // roman: only label notes that belong to the current scale.
+  const degreeIdx = intervals.indexOf(interval);
+  if (degreeIdx < 0 || degreeIdx >= ROMAN_NUMERALS.length) return '';
+  return ROMAN_NUMERALS[degreeIdx]!;
+}
 
 /** Corner-inclusive visibility predicate. Exported for the geometry test. */
 export function isCellVisibleL1(
@@ -139,6 +175,10 @@ export class GridRenderer {
   private rootPitchClass = 0; // C
   private keyMode: KeyMode = 'major';
   private keyPitchClasses = new Set<number>();
+  private labelMode: LabelMode = 'notes';
+  // When true, playing/flashing a pitch lights every clone of that pitch on
+  // the isomorphic grid; when false, only the literal cell that was hit.
+  private clonesOn = true;
   // Reserved for future per-mode rendering (chord-builder badges etc.).
   // Held as state so prop changes don't trigger a rebuild if only mode flips.
   // @ts-expect-error -- intentionally unused for now; consumed by future passes.
@@ -201,11 +241,30 @@ export class GridRenderer {
     this.keyMode = mode;
     this.refreshKey();
     this.applyKeyStyling();
+    // Degree / roman labels are key-relative, so re-print them on key change.
+    this.applyLabels();
   }
 
   setPlayMode(mode: PlayMode): void {
     this.playMode = mode;
     // Currently visual styling is the same across modes; reserved for future.
+  }
+
+  /** Choose what each cell prints. */
+  setLabelMode(mode: LabelMode): void {
+    if (mode === this.labelMode) return;
+    this.labelMode = mode;
+    this.applyLabels();
+  }
+
+  /** Toggle clone highlighting (see `clonesOn`). */
+  setClones(on: boolean): void {
+    this.clonesOn = on;
+  }
+
+  /** Whether clone highlighting is enabled (read by the gesture layer). */
+  getClones(): boolean {
+    return this.clonesOn;
   }
 
   /** Add a transient highlight class to the cells, optionally auto-clearing. */
@@ -436,16 +495,28 @@ export class GridRenderer {
         label.style.display = 'inline-block';
         label.style.pointerEvents = 'none';
         label.style.fontSize = `${Math.max(9, Math.floor(cs * 0.32))}px`;
-        label.textContent = musicalNotes[pitchInfo.pitch % 12]!;
+        label.textContent = computeLabel(
+          pitchInfo.pitch, this.rootPitchClass, keys[this.keyMode].intervals, this.labelMode,
+        );
         cell.appendChild(label);
 
         this.container.appendChild(cell);
         this.cells.set(key(x, actualY), {
-          el: cell, gx: x, gy: actualY, pitch: pitchInfo.pitch,
+          el: cell, labelEl: label, gx: x, gy: actualY, pitch: pitchInfo.pitch,
         });
       }
     }
     this.applyKeyStyling();
+  }
+
+  /** Re-print every cell's label for the active mode + key. */
+  private applyLabels(): void {
+    const intervals = keys[this.keyMode].intervals;
+    for (const rec of this.cells.values()) {
+      rec.labelEl.textContent = computeLabel(
+        rec.pitch, this.rootPitchClass, intervals, this.labelMode,
+      );
+    }
   }
 
   private applyKeyStyling(): void {

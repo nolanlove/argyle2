@@ -263,8 +263,13 @@ export class GridGestures {
     // Visual feedback fires on every tap/drag-into-cell regardless of who
     // owns audio playback (autoPlayOnHit=false routes audio through the
     // instrument layer, but the user still deserves a flash).
+    // With clones on, light every cell that plays this pitch so the user
+    // sees where the note lives across the isomorphic grid.
+    const cells = this.renderer.getClones()
+      ? this.renderer.cellsForPitch(hit.pitch)
+      : [{ x: hit.gx, y: hit.gy }];
     this.renderer.highlightCells(
-      [{ x: hit.gx, y: hit.gy }],
+      cells.length > 0 ? cells : [{ x: hit.gx, y: hit.gy }],
       { className: 'cell-flash', durationMs: 350 },
     );
     if (!this.autoPlayOnHit) return;

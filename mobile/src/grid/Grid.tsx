@@ -25,6 +25,7 @@ import { GridRenderer } from './renderer';
 import { GridGestures } from './gestures';
 import { createInstrument } from './api';
 import type { ArgyleInstrument, PlayMode } from './api';
+import type { LabelMode } from './renderer';
 import { InstrumentProvider } from './InstrumentContext';
 
 const GRID_WIDTH = 20;
@@ -38,6 +39,10 @@ export interface GridProps {
   rootNote?: string;
   rootPitchClass?: number;
   keyMode?: KeyMode;
+  /** What each cell prints (note name / degree / roman / none). */
+  labelMode?: LabelMode;
+  /** Light every clone of a played pitch across the grid. */
+  clones?: boolean;
   /** Rendered alongside the grid, inside the instrument provider. */
   children?: ReactNode;
 }
@@ -122,6 +127,14 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid(props, ref) 
   useEffect(() => {
     instrumentRef.current?.setPlayMode(props.playMode ?? 'notes');
   }, [props.playMode, mounted]);
+
+  useEffect(() => {
+    instrumentRef.current?.setLabelMode(props.labelMode ?? 'notes');
+  }, [props.labelMode, mounted]);
+
+  useEffect(() => {
+    instrumentRef.current?.setClones(props.clones ?? true);
+  }, [props.clones, mounted]);
 
   return (
     <InstrumentProvider instrument={instrumentRef.current}>

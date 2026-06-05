@@ -27,11 +27,14 @@ import { TeacherMode } from './modes/TeacherMode';
 import { SongwriterMode } from './modes/SongwriterMode';
 import { LabMode } from './modes/LabMode';
 import { loadMode, saveMode, type AppMode, nextMode, modeLabel } from './modes/mode-store';
+import { GridSetup } from './modes/GridSetup';
+import { loadSetup, saveSetup, type Setup } from './modes/setup-store';
 
 export function App() {
   const [audioReady, setAudioReady] = useState(false);
   const [mode, setModeState] = useState<AppMode>(() => loadMode());
   const [playMode, setPlayMode] = useState<PlayMode>('notes');
+  const [setup, setSetupState] = useState<Setup>(() => loadSetup());
   const [auditOpen, setAuditOpen] = useState(false);
   const [lastPlayLabel, setLastPlayLabel] = useState<string | null>(getLastPlayLabel());
   const longPressTimer = useRef<number | null>(null);
@@ -46,6 +49,11 @@ export function App() {
   const setMode = useCallback((m: AppMode) => {
     setModeState(m);
     saveMode(m);
+  }, []);
+
+  const setSetup = useCallback((s: Setup) => {
+    setSetupState(s);
+    saveSetup(s);
   }, []);
 
   // Pin wrapper height to innerHeight (iOS 100dvh occasionally resolves to
@@ -145,11 +153,19 @@ export function App() {
       {mode === 'lab' ? (
         <LabMode />
       ) : (
-        <Grid ref={gridRef} playMode={playMode} rootNote="C" keyMode="major">
+        <Grid
+          ref={gridRef}
+          playMode={playMode}
+          rootPitchClass={setup.rootPc}
+          keyMode={setup.scale}
+          labelMode={setup.labelMode}
+          clones={setup.clones}
+        >
           {mode === 'teacher' && (
             <TeacherMode playMode={playMode} setPlayMode={setPlayMode} />
           )}
           {mode === 'songwriter' && <SongwriterMode />}
+          <GridSetup setup={setup} onChange={setSetup} />
         </Grid>
       )}
 
